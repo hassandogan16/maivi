@@ -46,8 +46,8 @@ jobs:
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
-        name: maia-linux
-        path: dist/maia-linux
+        name: maivi-linux
+        path: dist/maivi-linux
 
   build-macos:
     name: Build macOS Executable
@@ -84,8 +84,8 @@ jobs:
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
-        name: maia-macos
-        path: dist/maia-macos
+        name: maivi-macos
+        path: dist/maivi-macos
 
   build-windows:
     name: Build Windows Executable
@@ -118,8 +118,8 @@ jobs:
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
-        name: maia-windows
-        path: dist/maia-windows.exe
+        name: maivi-windows
+        path: dist/maivi-windows.exe
 
   create-release:
     name: Create Release
