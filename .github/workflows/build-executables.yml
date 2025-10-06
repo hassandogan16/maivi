@@ -1,0 +1,142 @@
+name: Build Executables
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-linux:
+    name: Build Linux Executable
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y portaudio19-dev python3-pyaudio
+
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pyinstaller
+        pip install -e .
+
+    - name: Build executable
+      run: |
+        pyinstaller --onefile \
+          --name maia-linux \
+          --add-data "src/maia:maia" \
+          --hidden-import=nemo \
+          --hidden-import=nemo.collections.asr \
+          --hidden-import=PySide6 \
+          src/maia/__main__.py
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: maia-linux
+        path: dist/maia-linux
+
+  build-macos:
+    name: Build macOS Executable
+    runs-on: macos-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install system dependencies
+      run: |
+        brew install portaudio
+
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pyinstaller
+        pip install -e .
+
+    - name: Build executable
+      run: |
+        pyinstaller --onefile \
+          --name maia-macos \
+          --add-data "src/maia:maia" \
+          --hidden-import=nemo \
+          --hidden-import=nemo.collections.asr \
+          --hidden-import=PySide6 \
+          src/maia/__main__.py
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: maia-macos
+        path: dist/maia-macos
+
+  build-windows:
+    name: Build Windows Executable
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pyinstaller
+        pip install -e .
+
+    - name: Build executable
+      run: |
+        pyinstaller --onefile `
+          --name maia-windows.exe `
+          --add-data "src/maia;maia" `
+          --hidden-import=nemo `
+          --hidden-import=nemo.collections.asr `
+          --hidden-import=PySide6 `
+          src/maia/__main__.py
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: maia-windows
+        path: dist/maia-windows.exe
+
+  create-release:
+    name: Create Release
+    needs: [build-linux, build-macos, build-windows]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          maia-linux/maia-linux
+          maia-macos/maia-macos
+          maia-windows/maia-windows.exe
+        generate_release_notes: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

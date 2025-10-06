@@ -1,0 +1,6 @@
+include README.md
+include LICENSE
+include pyproject.toml
+recursive-include src/maia *.py
+recursive-exclude tests *
+recursive-exclude docs *
