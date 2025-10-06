@@ -134,12 +134,14 @@ class QtSTTServer(QObject):
         start_delay_seconds=2.0,
         speed=1.0,
         toggle_mode=True,
+        keep_recordings=3,  # Keep last N recordings
     ):
         super().__init__()
 
         self.auto_paste = auto_paste
         self.speed = speed
         self.toggle_mode = toggle_mode
+        self.keep_recordings = keep_recordings
 
         # Model and recorder
         self.model = None
@@ -148,6 +150,7 @@ class QtSTTServer(QObject):
             slide_seconds=slide_seconds,
             start_delay_seconds=start_delay_seconds,
             speed=speed,
+            keep_recordings=keep_recordings,
         )
         self.keyboard_controller = Controller()
         self.is_shutting_down = False
@@ -183,7 +186,64 @@ class QtSTTServer(QObject):
 
     def load_model(self):
         """Load STT model in background."""
-        print("Loading model...")
+        import logging
+
+        # Reduce NeMo logging verbosity
+        nemo_logger = logging.getLogger('nemo_logger')
+        nemo_logger.setLevel(logging.ERROR)
+
+        # Tips to display while loading
+        tips = [
+            "💡 Press Alt+Q to start recording, press again to stop",
+            "💡 Your transcription is automatically copied to clipboard",
+            "💡 Press Esc to exit the application at any time",
+            "💡 The overlay window shows real-time transcription progress",
+            "💡 Audio is processed in 7-second chunks with 4-second overlap",
+            "💡 Overlap merging ensures no words are cut mid-syllable",
+            "💡 First run downloads ~600MB model, subsequent runs are faster",
+            "💡 CPU-only mode is optimized for speed without GPU requirements",
+            "💡 Use --help flag to see all available command-line options",
+            "💡 Customize chunk size with --window and --slide parameters",
+            "💡 Enable auto-paste mode with --auto-paste flag",
+            "💡 Recordings saved to system app data directory (keeps last 3)",
+            "💡 Use --keep-recordings N to control how many files to keep",
+            "💡 Use --reprocess FILE to transcribe an existing recording",
+        ]
+
+        # Start tips display in background
+        tips_active = threading.Event()
+        tips_active.set()
+
+        def show_tips():
+            """Show rotating tips while loading."""
+            print("\n📥 Loading AI model (nvidia/parakeet-tdt-0.6b-v3)...")
+            print("=" * 60)
+            tip_idx = 0
+            dots = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+            dot_idx = 0
+
+            while tips_active.is_set():
+                # Show current tip with spinner
+                tip = tips[tip_idx % len(tips)]
+                spinner = dots[dot_idx % len(dots)]
+                # Clear line and show tip
+                print(f"\r{spinner} {tip:<58}", end="", flush=True)
+
+                dot_idx += 1
+
+                # Change tip every 3 seconds (30 iterations at 0.1s each)
+                if dot_idx % 30 == 0:
+                    tip_idx += 1
+
+                time.sleep(0.1)
+
+            # Clear the line
+            print("\r" + " " * 60 + "\r", end="", flush=True)
+            print("=" * 60)
+
+        tips_thread = threading.Thread(target=show_tips, daemon=True)
+        tips_thread.start()
+
         os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
         self.model = nemo_asr.models.ASRModel.from_pretrained(
@@ -191,7 +251,10 @@ class QtSTTServer(QObject):
         )
         self.model = self.model.cpu()
         self.model.eval()
-        print("✓ Model loaded\n")
+
+        tips_active.clear()
+        time.sleep(0.2)  # Let tips thread finish
+        print("✓ Model loaded successfully\n")
 
     def create_tray_icon(self):
         """Create system tray icon."""
@@ -245,12 +308,14 @@ class QtSTTServer(QObject):
             text = output[0].text.strip()
 
             if text:
-                prev_len = len(self.chunk_merger.result_words)
-                merged = self.chunk_merger.add_chunk(text, chunk_id, is_final=is_last_chunk)
-                new_len = len(self.chunk_merger.result_words)
+                # Show chunk transcription in terminal
+                print(f"[Chunk {chunk_id}] {text}")
+
+                merged = self.chunk_merger.add_chunk(text, is_final=is_last_chunk)
+                word_count = len(merged.split()) if merged else 0
 
                 # Update GUI via signal (thread-safe)
-                self.signals.update_text.emit(merged, new_len)
+                self.signals.update_text.emit(merged, word_count)
 
                 return text
             return None
@@ -306,20 +371,30 @@ class QtSTTServer(QObject):
 
         if duration < self.recorder.start_delay_seconds:
             # Short recording - transcribe all at once
+            print(f"🎯 Short recording detected ({duration:.1f}s), transcribing whole file...")
+
             self.is_transcribing = False
             if self.transcription_thread:
                 self.transcription_thread.join(timeout=2.0)
 
             try:
-                # Wait for model to load
+                # Wait for model to load (up to 60 seconds)
+                wait_count = 0
+                while self.model is None and wait_count < 600:
+                    if wait_count == 0:
+                        print("⏳ Waiting for model to load...")
+                    time.sleep(0.1)
+                    wait_count += 1
+
                 if self.model is None:
-                    print("⏳ Model still loading, cannot transcribe yet")
+                    print("❌ Error: Model failed to load")
                     return
 
                 output = self.model.transcribe([audio_file], timestamps=False)
                 text = output[0].text.strip()
 
                 if text:
+                    print(f"[Short recording] {text}")
                     pyperclip.copy(text)
                     self.signals.update_text.emit(f"✓ Copied: {text}", len(text.split()))
 
@@ -338,17 +413,49 @@ class QtSTTServer(QObject):
                         self.keyboard_controller.press("v")
                         self.keyboard_controller.release("v")
                         self.keyboard_controller.release(Key.ctrl)
+                else:
+                    print("⚠️  No speech detected in recording")
             except Exception as e:
                 print(f"Error: {e}")
 
         else:
             # Long recording - finalize streaming
+            print(f"⏹️  Stopping recording ({duration:.1f}s), finalizing transcription...")
+
             self.is_transcribing = False
             if self.transcription_thread:
                 self.transcription_thread.join(timeout=30.0)
 
             final_text = self.chunk_merger.get_result()
+
+            # Fallback: if streaming didn't produce results (2-3s recordings),
+            # transcribe the whole file instead
+            if not final_text:
+                print(f"⚠️  No chunks processed, transcribing whole file as fallback...")
+                try:
+                    # Wait for model to load (should already be loaded)
+                    wait_count = 0
+                    while self.model is None and wait_count < 600:
+                        if wait_count == 0:
+                            print("⏳ Waiting for model to load...")
+                        time.sleep(0.1)
+                        wait_count += 1
+
+                    if self.model is None:
+                        print("❌ Error: Model failed to load")
+                        return
+
+                    output = self.model.transcribe([audio_file], timestamps=False)
+                    final_text = output[0].text.strip()
+
+                    if final_text:
+                        print(f"[Fallback transcription] {final_text}")
+                except Exception as e:
+                    print(f"Error in fallback transcription: {e}")
+                    return
+
             if final_text:
+                print(f"\n📋 Final transcription:\n{final_text}\n")
                 pyperclip.copy(final_text)
                 self.signals.update_text.emit(f"✓ Copied: {final_text}", len(final_text.split()))
 
@@ -360,6 +467,18 @@ class QtSTTServer(QObject):
                         app_name='STT Server',
                         timeout=2
                     )
+            else:
+                print("⚠️  No speech detected in recording")
+
+        # Delete recording immediately if keep_recordings == -1
+        if self.keep_recordings == -1 and audio_file:
+            try:
+                from pathlib import Path
+                Path(audio_file).unlink()
+                # Optionally print deletion (commented to reduce noise)
+                # print(f"🗑️  Deleted recording: {Path(audio_file).name}")
+            except Exception as e:
+                print(f"Warning: Could not delete {audio_file}: {e}")
 
     def on_press(self, key):
         """Handle key press."""
@@ -436,7 +555,20 @@ class QtSTTServer(QObject):
 
         print("✓ STT Server running")
         print("  Press Alt+Q to start/stop recording")
-        print("  Press Esc to exit\n")
+        print("  Press Esc to exit")
+
+        # Show recording retention policy and directory location
+        from platformdirs import user_data_dir
+        from pathlib import Path
+        recordings_dir = Path(user_data_dir("maivi", "MaximeRivest")) / "recordings"
+
+        if self.keep_recordings == 0:
+            print(f"  📁 Keeping all recordings in {recordings_dir}")
+        elif self.keep_recordings == -1:
+            print("  🗑️  Deleting recordings immediately after transcription")
+        else:
+            print(f"  📁 Keeping last {self.keep_recordings} recording(s) in {recordings_dir}")
+        print()
 
         try:
             sys.exit(self.app.exec())

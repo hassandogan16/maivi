@@ -13,6 +13,25 @@ import soundfile as sf
 from pathlib import Path
 from datetime import datetime
 from collections import deque
+import sys
+import os
+from contextlib import contextmanager
+from platformdirs import user_data_dir, user_cache_dir
+
+
+@contextmanager
+def suppress_stderr():
+    """Suppress stderr output temporarily (for ALSA spam)."""
+    devnull = os.open(os.devnull, os.O_WRONLY)
+    old_stderr = os.dup(2)
+    sys.stderr.flush()
+    os.dup2(devnull, 2)
+    os.close(devnull)
+    try:
+        yield
+    finally:
+        os.dup2(old_stderr, 2)
+        os.close(old_stderr)
 
 
 class StreamingRecorder:
@@ -24,15 +43,21 @@ class StreamingRecorder:
         slide_seconds=1.0,
         start_delay_seconds=6.0,
         speed=1.0,
+        keep_recordings=3,  # Keep last N recordings (0 = keep all, -1 = keep none)
     ):
         self.sample_rate = sample_rate
         self.channels = channels
         self.chunk = 1024
         self.format = pyaudio.paInt16
-        self.audio = pyaudio.PyAudio()
+
+        # Initialize PyAudio (suppress ALSA error spam)
+        with suppress_stderr():
+            self.audio = pyaudio.PyAudio()
+
         self.stream = None
         self.is_recording = False
         self.speed = speed  # Speed multiplier
+        self.keep_recordings = keep_recordings  # How many recordings to keep
 
         # Streaming parameters
         self.window_seconds = window_seconds
@@ -180,30 +205,83 @@ class StreamingRecorder:
             new_duration = len(audio_float) / self.sample_rate
             print(f"   {original_duration:.1f}s → {new_duration:.1f}s")
 
-        # Save complete recording
+        # Save complete recording to proper application data directory
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        temp_dir = Path("samples")
-        temp_dir.mkdir(exist_ok=True)
+
+        # Use platform-appropriate directory for recordings
+        # Linux: ~/.local/share/maivi/recordings/
+        # macOS: ~/Library/Application Support/maivi/recordings/
+        # Windows: %APPDATA%\maivi\recordings\
+        data_dir = Path(user_data_dir("maivi", "MaximeRivest"))
+        recordings_dir = data_dir / "recordings"
+        recordings_dir.mkdir(parents=True, exist_ok=True)
 
         speed_suffix = f"_{self.speed}x" if self.speed != 1.0 else ""
-        output_path = temp_dir / f"recording_{timestamp}{speed_suffix}.wav"
+        output_path = recordings_dir / f"recording_{timestamp}{speed_suffix}.wav"
 
         try:
             sf.write(str(output_path), audio_float, self.sample_rate)
             duration = len(audio_float) / self.sample_rate
             print(f"✓ Complete recording saved: {output_path} ({duration:.1f}s)")
+
+            # Cleanup old recordings based on keep_recordings setting
+            self._cleanup_old_recordings()
+
             return str(output_path)
         except Exception as e:
             print(f"Error saving recording: {e}")
             return None
 
+    def _cleanup_old_recordings(self):
+        """Clean up old recording files, keeping only the last N."""
+        if self.keep_recordings == 0:
+            # Keep all recordings
+            return
+
+        if self.keep_recordings == -1:
+            # Delete immediately after transcription (handled by caller)
+            return
+
+        try:
+            # Use same directory as recordings
+            data_dir = Path(user_data_dir("maivi", "MaximeRivest"))
+            recordings_dir = data_dir / "recordings"
+
+            if not recordings_dir.exists():
+                return
+
+            # Get all recording files (not chunks)
+            recording_files = list(recordings_dir.glob("recording_*.wav"))
+
+            # Sort by modification time (newest first)
+            recording_files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+
+            # Delete files beyond keep_recordings
+            files_to_delete = recording_files[self.keep_recordings:]
+
+            for file_path in files_to_delete:
+                try:
+                    file_path.unlink()
+                    # Optionally print deletion (commented out to reduce noise)
+                    # print(f"🗑️  Deleted old recording: {file_path.name}")
+                except Exception as e:
+                    print(f"Warning: Could not delete {file_path}: {e}")
+
+        except Exception as e:
+            print(f"Warning: Error during cleanup: {e}")
+
     def save_chunk_to_file(self, chunk_np, chunk_id):
         """Save a chunk to a temporary WAV file for transcription."""
-        temp_dir = Path("samples/chunks")
-        temp_dir.mkdir(exist_ok=True, parents=True)
+        # Use platform-appropriate cache directory for temporary chunks
+        # Linux: ~/.cache/maivi/chunks/
+        # macOS: ~/Library/Caches/maivi/chunks/
+        # Windows: %LOCALAPPDATA%\maivi\Cache\chunks\
+        cache_dir = Path(user_cache_dir("maivi", "MaximeRivest"))
+        chunks_dir = cache_dir / "chunks"
+        chunks_dir.mkdir(exist_ok=True, parents=True)
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_path = temp_dir / f"chunk_{timestamp}_{chunk_id}.wav"
+        output_path = chunks_dir / f"chunk_{timestamp}_{chunk_id}.wav"
 
         try:
             with wave.open(str(output_path), "wb") as wf:

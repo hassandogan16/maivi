@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "maivi"
-version = "0.2.0"
+version = "0.3.0"
 description = "Maivi - My AI Voice Input: Real-time voice-to-text with hotkey support"
 readme = "README.md"
 requires-python = ">=3.10,<3.13"  # Python 3.13 not yet supported by NeMo
@@ -40,6 +40,7 @@ dependencies = [
     "torch>=2.0.0",
     "torchaudio>=2.0.0",
     "ml-dtypes>=0.5.0,<0.6.0",  # Pin to avoid Python 3.13 compatibility issues
+    "platformdirs>=3.0.0",  # Cross-platform application directories
 ]
 
 [project.optional-dependencies]
