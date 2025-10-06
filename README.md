@@ -1,8 +1,8 @@
-# Maia - My AI Assistant 🎤
+# Maivi - My AI Voice Input 🎤
 
 **Real-time voice-to-text transcription with hotkey support**
 
-Maia is a cross-platform desktop application that turns your voice into text using state-of-the-art AI models. Simply press **Alt+Q** to start recording, and press again to stop. Your transcription appears in real-time and is automatically copied to your clipboard.
+Maivi (My AI Voice Input) is a cross-platform desktop application that turns your voice into text using state-of-the-art AI models. Simply press **Alt+Q** to start recording, and press again to stop. Your transcription appears in real-time and is automatically copied to your clipboard.
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.8%2B-blue.svg)
@@ -24,7 +24,7 @@ Maia is a cross-platform desktop application that turns your voice into text usi
 ### Installation
 
 ```bash
-pip install maia
+pip install maivi
 ```
 
 ### System Requirements
@@ -46,7 +46,7 @@ brew install portaudio
 
 **GUI Mode (Recommended):**
 ```bash
-maia
+maivi
 ```
 
 Press **Alt+Q** to start recording, press **Alt+Q** again to stop. The transcription will appear in a floating overlay and be copied to your clipboard.
@@ -54,7 +54,7 @@ Press **Alt+Q** to start recording, press **Alt+Q** again to stop. The transcrip
 **CLI Mode:**
 ```bash
 # Basic CLI
-maia-cli
+maivi-cli
 
 # With live terminal UI
 maia-cli --show-ui
@@ -126,20 +126,20 @@ maia-cli --output-file transcription.txt
 
 ## 📦 Building Executables
 
-Maia can be packaged as standalone executables for easy distribution:
+Maivi can be packaged as standalone executables for easy distribution:
 
 ```bash
 # Install build dependencies
-pip install maia[build]
+pip install maivi[build]
 
 # Build executable
 pyinstaller --onefile --windowed \
-  --name maia \
+  --name maivi \
   --add-data "src/maia:maia" \
   src/maia/__main__.py
 ```
 
-Pre-built executables are available in [Releases](https://github.com/maximerivest/maia/releases).
+Pre-built executables are available in [Releases](https://github.com/MaximeRivest/maia/releases).
 
 ## 🏗️ Development
 
@@ -147,7 +147,7 @@ Pre-built executables are available in [Releases](https://github.com/maximerives
 
 ```bash
 # Clone repository
-git clone https://github.com/maximerivest/maia.git
+git clone https://github.com/MaximeRivest/maia.git
 cd maia
 
 # Install in development mode
@@ -276,10 +276,10 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## 💬 Support
 
-- 📫 [Create an issue](https://github.com/maximerivest/maia/issues)
-- 💡 [Feature requests](https://github.com/maximerivest/maia/issues/new?labels=enhancement)
-- 🐛 [Bug reports](https://github.com/maximerivest/maia/issues/new?labels=bug)
+- 📫 [Create an issue](https://github.com/MaximeRivest/maia/issues)
+- 💡 [Feature requests](https://github.com/MaximeRivest/maia/issues/new?labels=enhancement)
+- 🐛 [Bug reports](https://github.com/MaximeRivest/maia/issues/new?labels=bug)
 
 ---
 
-Made with ❤️ by [Maxime Rivest](https://github.com/maximerivest)
+Made with ❤️ by [Maxime Rivest](https://github.com/MaximeRivest)

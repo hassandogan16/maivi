@@ -3,9 +3,9 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "maia"
+name = "maivi"
 version = "0.1.0"
-description = "Maia - My AI Assistant: Real-time voice-to-text with hotkey support"
+description = "Maivi - My AI Voice Input: Real-time voice-to-text with hotkey support"
 readme = "README.md"
 requires-python = ">=3.8,<3.13"
 license = {text = "MIT"}
@@ -58,13 +58,13 @@ build = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/maximerivest/maia"
-Repository = "https://github.com/maximerivest/maia"
-Issues = "https://github.com/maximerivest/maia/issues"
+Homepage = "https://github.com/MaximeRivest/maia"
+Repository = "https://github.com/MaximeRivest/maia"
+Issues = "https://github.com/MaximeRivest/maia/issues"
 
 [project.scripts]
-maia = "maia.__main__:main"
-maia-cli = "maia.cli.cli:main"
+maivi = "maia.__main__:main"
+maivi-cli = "maia.cli.cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
