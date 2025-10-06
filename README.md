@@ -23,6 +23,17 @@ Maivi (My AI Voice Input) is a cross-platform desktop application that turns you
 
 ### Installation
 
+**CPU-only (Recommended - much faster, 100MB vs 2GB+):**
+```bash
+pip install maivi --extra-index-url https://download.pytorch.org/whl/cpu
+```
+
+**Or with GPU support (if you have NVIDIA GPU):**
+```bash
+pip install maivi --extra-index-url https://download.pytorch.org/whl/cu121
+```
+
+**Standard install (may download large CUDA files):**
 ```bash
 pip install maivi
 ```
