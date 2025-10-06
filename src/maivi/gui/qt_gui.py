@@ -10,7 +10,7 @@ from pathlib import Path
 
 from PySide6.QtWidgets import QApplication, QWidget, QLabel, QHBoxLayout, QSystemTrayIcon, QMenu
 from PySide6.QtCore import Qt, QTimer, Signal, QObject, QThread
-from PySide6.QtGui import QIcon, QPixmap, QPainter, QColor, QFont
+from PySide6.QtGui import QIcon, QPixmap, QPainter, QColor, QFont, QFontDatabase
 
 import nemo.collections.asr as nemo_asr
 import pyperclip
@@ -20,6 +20,10 @@ from pynput.keyboard import Key, Controller
 
 from maivi.core.streaming_recorder import StreamingRecorder
 from maivi.core.chunk_merger import SimpleChunkMerger
+from maivi.utils.macos_permissions import (
+    ensure_accessibility_permissions,
+    open_system_settings_privacy,
+)
 
 # Cross-platform notifications
 try:
@@ -83,7 +87,9 @@ class TranscriptionOverlay(QWidget):
 
         # Text display
         self.text_label = QLabel("Ready - Press Alt+Q to record")
-        self.text_label.setFont(QFont('Courier', 10))
+        fixed_font = QFontDatabase.systemFont(QFontDatabase.FixedFont)
+        fixed_font.setPointSize(10)
+        self.text_label.setFont(fixed_font)
         self.text_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         layout.addWidget(self.text_label, stretch=1)
 
@@ -138,6 +144,8 @@ class QtSTTServer(QObject):
     ):
         super().__init__()
 
+        self.print_lock = threading.Lock()
+
         self.auto_paste = auto_paste
         self.speed = speed
         self.toggle_mode = toggle_mode
@@ -173,6 +181,11 @@ class QtSTTServer(QObject):
         self.signals = TranscriptionSignals()
         self.signals.update_text.connect(self._update_text_slot)
         self.signals.set_recording.connect(self._set_recording_slot)
+
+    def _print(self, message="", *, end="\n", flush=True):
+        """Thread-safe printing helper for coordinated console output."""
+        with self.print_lock:
+            print(message, end=end, flush=flush)
 
     def _update_text_slot(self, text, word_count):
         """Qt slot for updating text (runs in main thread)."""
@@ -216,8 +229,8 @@ class QtSTTServer(QObject):
 
         def show_tips():
             """Show rotating tips while loading."""
-            print("\n📥 Loading AI model (nvidia/parakeet-tdt-0.6b-v3)...")
-            print("=" * 60)
+            self._print("\n📥 Loading AI model (nvidia/parakeet-tdt-0.6b-v3)...")
+            self._print("=" * 60)
             tip_idx = 0
             dots = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
             dot_idx = 0
@@ -227,7 +240,7 @@ class QtSTTServer(QObject):
                 tip = tips[tip_idx % len(tips)]
                 spinner = dots[dot_idx % len(dots)]
                 # Clear line and show tip
-                print(f"\r{spinner} {tip:<58}", end="", flush=True)
+                self._print(f"\r{spinner} {tip:<58}", end="", flush=True)
 
                 dot_idx += 1
 
@@ -238,8 +251,8 @@ class QtSTTServer(QObject):
                 time.sleep(0.1)
 
             # Clear the line
-            print("\r" + " " * 60 + "\r", end="", flush=True)
-            print("=" * 60)
+            self._print("\r" + " " * 60 + "\r", end="", flush=True)
+            self._print("=" * 60)
 
         tips_thread = threading.Thread(target=show_tips, daemon=True)
         tips_thread.start()
@@ -254,7 +267,7 @@ class QtSTTServer(QObject):
 
         tips_active.clear()
         time.sleep(0.2)  # Let tips thread finish
-        print("✓ Model loaded successfully\n")
+        self._print("✓ Model loaded successfully\n")
 
     def create_tray_icon(self):
         """Create system tray icon."""
@@ -297,7 +310,7 @@ class QtSTTServer(QObject):
         try:
             # Wait for model to load
             if self.model is None:
-                print("⏳ Waiting for model to load...")
+                self._print("⏳ Waiting for model to load...")
                 return None
 
             chunk_file = self.recorder.save_chunk_to_file(chunk_np, chunk_id)
@@ -309,7 +322,7 @@ class QtSTTServer(QObject):
 
             if text:
                 # Show chunk transcription in terminal
-                print(f"[Chunk {chunk_id}] {text}")
+                self._print(f"[Chunk {chunk_id}] {text}")
 
                 merged = self.chunk_merger.add_chunk(text, is_final=is_last_chunk)
                 word_count = len(merged.split()) if merged else 0
@@ -321,7 +334,7 @@ class QtSTTServer(QObject):
             return None
 
         except Exception as e:
-            print(f"Error: {e}")
+            self._print(f"Error: {e}")
             return None
 
     def streaming_transcription_loop(self):
@@ -371,7 +384,9 @@ class QtSTTServer(QObject):
 
         if duration < self.recorder.start_delay_seconds:
             # Short recording - transcribe all at once
-            print(f"🎯 Short recording detected ({duration:.1f}s), transcribing whole file...")
+            self._print(
+                f"🎯 Short recording detected ({duration:.1f}s), transcribing whole file..."
+            )
 
             self.is_transcribing = False
             if self.transcription_thread:
@@ -382,19 +397,19 @@ class QtSTTServer(QObject):
                 wait_count = 0
                 while self.model is None and wait_count < 600:
                     if wait_count == 0:
-                        print("⏳ Waiting for model to load...")
+                        self._print("⏳ Waiting for model to load...")
                     time.sleep(0.1)
                     wait_count += 1
 
                 if self.model is None:
-                    print("❌ Error: Model failed to load")
+                    self._print("❌ Error: Model failed to load")
                     return
 
                 output = self.model.transcribe([audio_file], timestamps=False)
                 text = output[0].text.strip()
 
                 if text:
-                    print(f"[Short recording] {text}")
+                    self._print(f"[Short recording] {text}")
                     pyperclip.copy(text)
                     self.signals.update_text.emit(f"✓ Copied: {text}", len(text.split()))
 
@@ -414,13 +429,13 @@ class QtSTTServer(QObject):
                         self.keyboard_controller.release("v")
                         self.keyboard_controller.release(Key.ctrl)
                 else:
-                    print("⚠️  No speech detected in recording")
+                    self._print("⚠️  No speech detected in recording")
             except Exception as e:
-                print(f"Error: {e}")
+                self._print(f"Error: {e}")
 
         else:
             # Long recording - finalize streaming
-            print(f"⏹️  Stopping recording ({duration:.1f}s), finalizing transcription...")
+            self._print(f"⏹️  Stopping recording ({duration:.1f}s), finalizing transcription...")
 
             self.is_transcribing = False
             if self.transcription_thread:
@@ -431,31 +446,31 @@ class QtSTTServer(QObject):
             # Fallback: if streaming didn't produce results (2-3s recordings),
             # transcribe the whole file instead
             if not final_text:
-                print(f"⚠️  No chunks processed, transcribing whole file as fallback...")
+                self._print("⚠️  No chunks processed, transcribing whole file as fallback...")
                 try:
                     # Wait for model to load (should already be loaded)
                     wait_count = 0
                     while self.model is None and wait_count < 600:
                         if wait_count == 0:
-                            print("⏳ Waiting for model to load...")
+                            self._print("⏳ Waiting for model to load...")
                         time.sleep(0.1)
                         wait_count += 1
 
                     if self.model is None:
-                        print("❌ Error: Model failed to load")
+                        self._print("❌ Error: Model failed to load")
                         return
 
                     output = self.model.transcribe([audio_file], timestamps=False)
                     final_text = output[0].text.strip()
 
                     if final_text:
-                        print(f"[Fallback transcription] {final_text}")
+                        self._print(f"[Fallback transcription] {final_text}")
                 except Exception as e:
-                    print(f"Error in fallback transcription: {e}")
+                    self._print(f"Error in fallback transcription: {e}")
                     return
 
             if final_text:
-                print(f"\n📋 Final transcription:\n{final_text}\n")
+                self._print(f"\n📋 Final transcription:\n{final_text}\n")
                 pyperclip.copy(final_text)
                 self.signals.update_text.emit(f"✓ Copied: {final_text}", len(final_text.split()))
 
@@ -468,7 +483,7 @@ class QtSTTServer(QObject):
                         timeout=2
                     )
             else:
-                print("⚠️  No speech detected in recording")
+                self._print("⚠️  No speech detected in recording")
 
         # Delete recording immediately if keep_recordings == -1
         if self.keep_recordings == -1 and audio_file:
@@ -478,7 +493,7 @@ class QtSTTServer(QObject):
                 # Optionally print deletion (commented to reduce noise)
                 # print(f"🗑️  Deleted recording: {Path(audio_file).name}")
             except Exception as e:
-                print(f"Warning: Could not delete {audio_file}: {e}")
+                self._print(f"Warning: Could not delete {audio_file}: {e}")
 
     def on_press(self, key):
         """Handle key press."""
@@ -546,16 +561,50 @@ class QtSTTServer(QObject):
         # Create system tray
         self.create_tray_icon()
 
-        # Start keyboard listener in background
-        keyboard_listener = keyboard.Listener(
-            on_press=self.on_press,
-            on_release=self.on_release
-        )
-        keyboard_listener.start()
+        # macOS requires accessibility permission for global hotkeys
+        accessibility_ready = ensure_accessibility_permissions(prompt=True)
+        if not accessibility_ready:
+            self._print("⚠️  Grant macOS accessibility permissions so Alt+Q can be captured.")
+            opened_accessibility = open_system_settings_privacy("Privacy_Accessibility")
+            if opened_accessibility:
+                self._print(
+                    "   → Opened System Settings → Privacy & Security → Accessibility for you."
+                )
+            else:
+                self._print(
+                    "   1. Open System Settings → Privacy & Security → Accessibility manually."
+                )
 
-        print("✓ STT Server running")
-        print("  Press Alt+Q to start/stop recording")
-        print("  Press Esc to exit")
+            opened_input = open_system_settings_privacy("Privacy_ListenEvent")
+            if opened_input:
+                self._print(
+                    "   → Opened the Input Monitoring pane so you can enable Maivi."
+                )
+            else:
+                self._print(
+                    "   2. Enable Maivi (Python) under Input Monitoring to remove the warning."
+                )
+
+            self._print("   Restart Maivi after granting access if the hotkey does not respond.")
+
+        # Start keyboard listener in background
+        keyboard_listener = None
+        try:
+            keyboard_listener = keyboard.Listener(
+                on_press=self.on_press,
+                on_release=self.on_release
+            )
+            keyboard_listener.start()
+        except Exception as error:
+            self._print(f"❌ Unable to start keyboard listener: {error}")
+            if sys.platform == "darwin":
+                self._print(
+                    "   Check System Settings → Privacy & Security → Accessibility and Input Monitoring."
+                )
+
+        self._print("✓ STT Server running")
+        self._print("  Press Alt+Q to start/stop recording")
+        self._print("  Press Esc to exit")
 
         # Show recording retention policy and directory location
         from platformdirs import user_data_dir
@@ -563,16 +612,17 @@ class QtSTTServer(QObject):
         recordings_dir = Path(user_data_dir("maivi", "MaximeRivest")) / "recordings"
 
         if self.keep_recordings == 0:
-            print(f"  📁 Keeping all recordings in {recordings_dir}")
+            self._print(f"  📁 Keeping all recordings in {recordings_dir}")
         elif self.keep_recordings == -1:
-            print("  🗑️  Deleting recordings immediately after transcription")
+            self._print("  🗑️  Deleting recordings immediately after transcription")
         else:
-            print(f"  📁 Keeping last {self.keep_recordings} recording(s) in {recordings_dir}")
-        print()
+            self._print(f"  📁 Keeping last {self.keep_recordings} recording(s) in {recordings_dir}")
+        self._print()
 
         try:
             sys.exit(self.app.exec())
         finally:
             # Cleanup
-            keyboard_listener.stop()
+            if keyboard_listener:
+                keyboard_listener.stop()
             self.recorder.cleanup()
