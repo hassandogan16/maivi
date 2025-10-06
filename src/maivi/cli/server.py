@@ -13,10 +13,10 @@ import soundfile as sf
 from pynput import keyboard
 from pynput.keyboard import Key, Controller
 
-from maia.core.streaming_recorder import StreamingRecorder
-from maia.core.chunk_merger import SimpleChunkMerger  # New simple merger
-from maia.cli.terminal_ui import create_streaming_ui
-from maia.core.pause_detector import PauseDetector
+from maivi.core.streaming_recorder import StreamingRecorder
+from maivi.core.chunk_merger import SimpleChunkMerger  # New simple merger
+from maivi.cli.terminal_ui import create_streaming_ui
+from maivi.core.pause_detector import PauseDetector
 
 # Cross-platform notifications
 try:

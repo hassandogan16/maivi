@@ -36,12 +36,12 @@ jobs:
     - name: Build executable
       run: |
         pyinstaller --onefile \
-          --name maia-linux \
-          --add-data "src/maia:maia" \
+          --name maivi-linux \
+          --add-data "src/maivi:maivi" \
           --hidden-import=nemo \
           --hidden-import=nemo.collections.asr \
           --hidden-import=PySide6 \
-          src/maia/__main__.py
+          src/maivi/__main__.py
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
@@ -74,12 +74,12 @@ jobs:
     - name: Build executable
       run: |
         pyinstaller --onefile \
-          --name maia-macos \
-          --add-data "src/maia:maia" \
+          --name maivi-macos \
+          --add-data "src/maivi:maivi" \
           --hidden-import=nemo \
           --hidden-import=nemo.collections.asr \
           --hidden-import=PySide6 \
-          src/maia/__main__.py
+          src/maivi/__main__.py
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
@@ -108,12 +108,12 @@ jobs:
     - name: Build executable
       run: |
         pyinstaller --onefile `
-          --name maia-windows.exe `
-          --add-data "src/maia;maia" `
+          --name maivi-windows.exe `
+          --add-data "src/maivi;maivi" `
           --hidden-import=nemo `
           --hidden-import=nemo.collections.asr `
           --hidden-import=PySide6 `
-          src/maia/__main__.py
+          src/maivi/__main__.py
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
@@ -137,9 +137,9 @@ jobs:
       uses: softprops/action-gh-release@v1
       with:
         files: |
-          maia-linux/maia-linux
-          maia-macos/maia-macos
-          maia-windows/maia-windows.exe
+          maivi-linux/maivi-linux
+          maivi-macos/maivi-macos
+          maivi-windows/maivi-windows.exe
         generate_release_notes: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

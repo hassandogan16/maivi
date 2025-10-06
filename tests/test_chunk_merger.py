@@ -1,7 +1,7 @@
 """Tests for SimpleChunkMerger."""
 
 import pytest
-from maia.core.chunk_merger import SimpleChunkMerger
+from maivi.core.chunk_merger import SimpleChunkMerger
 
 
 class TestSimpleChunkMerger:

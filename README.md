@@ -5,7 +5,7 @@
 Maivi (My AI Voice Input) is a cross-platform desktop application that turns your voice into text using state-of-the-art AI models. Simply press **Alt+Q** to start recording, and press again to stop. Your transcription appears in real-time and is automatically copied to your clipboard.
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![Python](https://img.shields.io/badge/python-3.8%2B-blue.svg)
+![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)
 ![Platform](https://img.shields.io/badge/platform-linux%20%7C%20macos%20%7C%20windows-lightgrey.svg)
 
 ## ✨ Features

@@ -7,7 +7,7 @@ name = "maivi"
 version = "0.1.0"
 description = "Maivi - My AI Voice Input: Real-time voice-to-text with hotkey support"
 readme = "README.md"
-requires-python = ">=3.8,<3.13"
+requires-python = ">=3.10,<3.13"
 license = {text = "MIT"}
 authors = [
     {name = "Maxime Rivest"}
@@ -20,8 +20,6 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -63,8 +61,8 @@ Repository = "https://github.com/MaximeRivest/maivi"
 Issues = "https://github.com/MaximeRivest/maivi/issues"
 
 [project.scripts]
-maivi = "maia.__main__:main"
-maivi-cli = "maia.cli.cli:main"
+maivi = "maivi.__main__:main"
+maivi-cli = "maivi.cli.cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
@@ -74,7 +72,7 @@ where = ["src"]
 
 [tool.black]
 line-length = 100
-target-version = ['py38', 'py39', 'py310', 'py311']
+target-version = ['py310', 'py311']
 
 [tool.isort]
 profile = "black"

@@ -3,7 +3,7 @@
 CLI interface for STT server.
 """
 import argparse
-from maia.cli.server import StreamingSTTServer
+from maivi.cli.server import StreamingSTTServer
 
 
 def main():

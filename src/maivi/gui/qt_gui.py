@@ -18,8 +18,8 @@ import soundfile as sf
 from pynput import keyboard
 from pynput.keyboard import Key, Controller
 
-from maia.core.streaming_recorder import StreamingRecorder
-from maia.core.chunk_merger import SimpleChunkMerger
+from maivi.core.streaming_recorder import StreamingRecorder
+from maivi.core.chunk_merger import SimpleChunkMerger
 
 # Cross-platform notifications
 try:

@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-Entry point for Maia - My AI Assistant (Voice-to-Text).
+Entry point for Maivi - My AI Voice Input.
 Launches the Qt GUI by default.
 """
 
 def main():
-    """Main entry point for Maia GUI."""
+    """Main entry point for Maivi GUI."""
     import sys
-    from maia.gui.qt_gui import QtSTTServer
+    from maivi.gui.qt_gui import QtSTTServer
 
     server = QtSTTServer(
         auto_paste=False,
