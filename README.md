@@ -139,7 +139,7 @@ pyinstaller --onefile --windowed \
   src/maia/__main__.py
 ```
 
-Pre-built executables are available in [Releases](https://github.com/MaximeRivest/maia/releases).
+Pre-built executables are available in [Releases](https://github.com/MaximeRivest/maivi/releases).
 
 ## 🏗️ Development
 
@@ -147,8 +147,8 @@ Pre-built executables are available in [Releases](https://github.com/MaximeRives
 
 ```bash
 # Clone repository
-git clone https://github.com/MaximeRivest/maia.git
-cd maia
+git clone https://github.com/MaximeRivest/maivi.git
+cd maivi
 
 # Install in development mode
 pip install -e .[dev]
@@ -276,9 +276,9 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## 💬 Support
 
-- 📫 [Create an issue](https://github.com/MaximeRivest/maia/issues)
-- 💡 [Feature requests](https://github.com/MaximeRivest/maia/issues/new?labels=enhancement)
-- 🐛 [Bug reports](https://github.com/MaximeRivest/maia/issues/new?labels=bug)
+- 📫 [Create an issue](https://github.com/MaximeRivest/maivi/issues)
+- 💡 [Feature requests](https://github.com/MaximeRivest/maivi/issues/new?labels=enhancement)
+- 🐛 [Bug reports](https://github.com/MaximeRivest/maivi/issues/new?labels=bug)
 
 ---
 

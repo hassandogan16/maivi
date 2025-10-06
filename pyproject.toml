@@ -58,9 +58,9 @@ build = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/MaximeRivest/maia"
-Repository = "https://github.com/MaximeRivest/maia"
-Issues = "https://github.com/MaximeRivest/maia/issues"
+Homepage = "https://github.com/MaximeRivest/maivi"
+Repository = "https://github.com/MaximeRivest/maivi"
+Issues = "https://github.com/MaximeRivest/maivi/issues"
 
 [project.scripts]
 maivi = "maia.__main__:main"
