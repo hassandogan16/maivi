@@ -18,15 +18,15 @@ Examples:
   maivi                                  # Start with defaults
   maivi --auto-paste                     # Auto-paste transcribed text
   maivi --window 10 --slide 5            # Custom chunk timing
-  maivi --no-toggle                      # Hold mode (hold Alt+Q to record)
+  maivi --no-toggle                      # Hold mode (hold Alt+Q / Option+Q to record)
   maivi --keep-recordings 10             # Keep last 10 recordings
   maivi --keep-recordings 0              # Keep all recordings
   maivi --keep-recordings -1             # Delete immediately after transcription
   maivi --reprocess ~/.local/share/maivi/recordings/recording_20251005_123456.wav
 
 Controls:
-  Alt+Q     Start/stop recording (toggle mode)
-  Esc       Exit application
+  Alt+Q (Option+Q on macOS)    Start/stop recording (toggle mode)
+  Esc                          Exit application
 
 How it works:
   Maivi records audio in overlapping chunks (default: 7s chunks, 3s intervals).
@@ -86,7 +86,7 @@ For more info: https://github.com/MaximeRivest/maivi
     parser.add_argument(
         "--no-toggle",
         action="store_true",
-        help="Use hold mode instead of toggle (hold Alt+Q to record)."
+        help="Use hold mode instead of toggle (hold Alt+Q / Option+Q on macOS to record)."
     )
 
     # Recording management
