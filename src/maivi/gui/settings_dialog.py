@@ -4,11 +4,12 @@ Settings dialog for Maivi configuration.
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QDoubleSpinBox, QSpinBox, QCheckBox,
-    QGroupBox, QFormLayout, QDialogButtonBox, QMessageBox
+    QGroupBox, QFormLayout, QDialogButtonBox, QMessageBox, QComboBox
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QKeySequence
 from maivi import __version__
+import sounddevice as sd
 
 
 class HotkeyEdit(QLineEdit):
@@ -140,6 +141,8 @@ class HotkeyEdit(QLineEdit):
 class SettingsDialog(QDialog):
     """Settings dialog for configuring Maivi."""
 
+    settings_changed = Signal(dict)  # Emits changed settings
+
     def __init__(self, config, parent=None):
         super().__init__(parent)
         self.config = config
@@ -174,6 +177,12 @@ class SettingsDialog(QDialog):
         # Audio settings
         audio_group = QGroupBox("Audio Settings")
         audio_layout = QFormLayout()
+
+        # Audio device selection
+        self.audio_device_combo = QComboBox()
+        self.audio_device_combo.setToolTip("Select input device for recording")
+        self._populate_audio_devices()
+        audio_layout.addRow("Microphone:", self.audio_device_combo)
 
         self.window_spin = QDoubleSpinBox()
         self.window_spin.setRange(1.0, 30.0)
@@ -221,6 +230,18 @@ class SettingsDialog(QDialog):
         behavior_group.setLayout(behavior_layout)
         layout.addWidget(behavior_group)
 
+        # Appearance settings
+        appearance_group = QGroupBox("Appearance")
+        appearance_layout = QFormLayout()
+
+        self.theme_combo = QComboBox()
+        self.theme_combo.addItems(["Auto (System)", "Light", "Dark"])
+        self.theme_combo.setToolTip("Choose UI theme (Auto follows system theme)")
+        appearance_layout.addRow("Theme:", self.theme_combo)
+
+        appearance_group.setLayout(appearance_layout)
+        layout.addWidget(appearance_group)
+
         # Recording settings
         recording_group = QGroupBox("Recording Management")
         recording_layout = QFormLayout()
@@ -246,6 +267,22 @@ class SettingsDialog(QDialog):
 
         self.setLayout(layout)
 
+    def _populate_audio_devices(self):
+        """Populate the audio device combo box with available input devices."""
+        try:
+            devices = sd.query_devices()
+            self.audio_device_combo.addItem("Default", None)
+
+            for idx, device in enumerate(devices):
+                # Only show input devices (those with input channels)
+                if device['max_input_channels'] > 0:
+                    device_name = device['name']
+                    # Show both index and name for clarity
+                    self.audio_device_combo.addItem(f"{device_name} (#{idx})", idx)
+        except Exception as e:
+            print(f"Warning: Could not query audio devices: {e}")
+            self.audio_device_combo.addItem("Default", None)
+
     def load_settings(self):
         """Load settings from config into UI."""
         self.hotkey_edit.set_hotkey(self.config.get("hotkey", "alt+q"))
@@ -257,8 +294,28 @@ class SettingsDialog(QDialog):
         self.toggle_mode_check.setChecked(self.config.get("toggle_mode", True))
         self.keep_recordings_spin.setValue(self.config.get("keep_recordings", 3))
 
+        # Load audio device
+        audio_device = self.config.get("audio_device", None)
+        if audio_device is None:
+            self.audio_device_combo.setCurrentIndex(0)  # Default
+        else:
+            # Find the index with this device ID
+            for i in range(self.audio_device_combo.count()):
+                if self.audio_device_combo.itemData(i) == audio_device:
+                    self.audio_device_combo.setCurrentIndex(i)
+                    break
+
+        # Load theme
+        theme = self.config.get("theme", "auto")
+        theme_index = {"auto": 0, "light": 1, "dark": 2}.get(theme, 0)
+        self.theme_combo.setCurrentIndex(theme_index)
+
     def save_settings(self):
-        """Save settings from UI to config."""
+        """Save settings from UI to config and emit changes."""
+        # Get old values to detect changes
+        old_settings = self.config.settings.copy()
+
+        # Save all settings
         self.config.set("hotkey", self.hotkey_edit.get_hotkey())
         self.config.set("window_seconds", self.window_spin.value())
         self.config.set("slide_seconds", self.slide_spin.value())
@@ -267,7 +324,25 @@ class SettingsDialog(QDialog):
         self.config.set("auto_paste", self.auto_paste_check.isChecked())
         self.config.set("toggle_mode", self.toggle_mode_check.isChecked())
         self.config.set("keep_recordings", self.keep_recordings_spin.value())
+
+        # Save new settings
+        audio_device = self.audio_device_combo.currentData()
+        self.config.set("audio_device", audio_device)
+
+        theme_map = {0: "auto", 1: "light", 2: "dark"}
+        theme = theme_map.get(self.theme_combo.currentIndex(), "auto")
+        self.config.set("theme", theme)
+
         self.config.save()
+
+        # Emit changed settings
+        changed_settings = {}
+        for key, value in self.config.settings.items():
+            if old_settings.get(key) != value:
+                changed_settings[key] = value
+
+        if changed_settings:
+            self.settings_changed.emit(changed_settings)
 
     def restore_defaults(self):
         """Restore default settings."""
@@ -287,11 +362,11 @@ class SettingsDialog(QDialog):
         """Handle OK button."""
         self.save_settings()
 
-        # Show restart message
+        # Show success message (settings now apply immediately via hot reload)
         QMessageBox.information(
             self,
             "Settings Saved",
-            "Settings have been saved.\n\nNote: Some settings (like hotkey) require a restart to take effect.",
+            "Settings have been saved and applied!",
             QMessageBox.Ok
         )
 

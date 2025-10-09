@@ -20,6 +20,9 @@ class Config:
         "auto_paste": False,
         "toggle_mode": True,
         "keep_recordings": 3,
+        "clear_clipboard_after_paste": False,  # Clear clipboard after auto-paste
+        "audio_device": None,  # None = default device, or device index/name
+        "theme": "auto",  # auto/light/dark
     }
 
     def __init__(self):

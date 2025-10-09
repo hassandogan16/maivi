@@ -26,14 +26,62 @@ from maivi.utils.macos_permissions import (
 )
 from maivi.config import Config
 from maivi.gui.settings_dialog import SettingsDialog
+from maivi.gui.recordings_dialog import RecordingsDialog
 from maivi import __version__
 
 # Cross-platform notifications
-try:
-    from plyer import notification
-    NOTIFICATIONS_AVAILABLE = True
-except ImportError:
-    NOTIFICATIONS_AVAILABLE = False
+import platform
+NOTIFICATIONS_AVAILABLE = False
+notification = None
+
+
+def detect_system_theme():
+    """Detect system theme (light/dark) on macOS, returns 'light' or 'dark'."""
+    if platform.system() == 'Darwin':
+        try:
+            import subprocess
+            result = subprocess.run(
+                ['defaults', 'read', '-g', 'AppleInterfaceStyle'],
+                capture_output=True,
+                text=True,
+                check=False
+            )
+            # If the command succeeds and returns "Dark", system is in dark mode
+            if result.returncode == 0 and 'Dark' in result.stdout:
+                return 'dark'
+            else:
+                return 'light'
+        except Exception:
+            return 'light'  # Default to light if detection fails
+    # For other platforms, default to light (can be extended later)
+    return 'light'
+
+# Try to use macOS native notifications first
+if platform.system() == 'Darwin':
+    try:
+        import subprocess
+        def _macos_notify(title, message, timeout=10):
+            """Use macOS native osascript for notifications"""
+            script = f'display notification "{message}" with title "{title}"'
+            subprocess.run(['osascript', '-e', script], check=False, capture_output=True)
+
+        class MacOSNotification:
+            @staticmethod
+            def notify(title="", message="", timeout=10):
+                _macos_notify(title, message, timeout)
+
+        notification = MacOSNotification()
+        NOTIFICATIONS_AVAILABLE = True
+    except Exception:
+        pass
+
+# Fall back to plyer for other platforms
+if not NOTIFICATIONS_AVAILABLE:
+    try:
+        from plyer import notification
+        NOTIFICATIONS_AVAILABLE = True
+    except ImportError:
+        NOTIFICATIONS_AVAILABLE = False
 
 
 class TranscriptionSignals(QObject):
@@ -45,12 +93,13 @@ class TranscriptionSignals(QObject):
 class TranscriptionOverlay(QWidget):
     """Small overlay window showing scrolling transcription near taskbar."""
 
-    def __init__(self, width=400, height=60, hotkey="alt+q"):
+    def __init__(self, width=400, height=60, hotkey="alt+q", theme="auto"):
         super().__init__()
         self.width = width
         self.height = height
         self.recording = False
         self.hotkey = hotkey
+        self.theme = theme
 
         # Setup window
         self.setWindowTitle("STT Live")
@@ -61,32 +110,17 @@ class TranscriptionOverlay(QWidget):
         )
         self.setAttribute(Qt.WA_TranslucentBackground, False)
 
-        # Dark theme
-        self.bg_color = '#1e1e1e'
-        self.text_color = '#00ff00'
-        self.accent_color = '#ff4444'
-
-        self.setStyleSheet(f"""
-            QWidget {{
-                background-color: {self.bg_color};
-                border: 2px solid #444444;
-            }}
-            QLabel {{
-                color: {self.text_color};
-                background-color: transparent;
-                border: none;
-            }}
-        """)
+        # Apply zen theme
+        self._apply_theme()
 
         # Layout
         layout = QHBoxLayout()
-        layout.setContentsMargins(10, 10, 10, 10)
-        layout.setSpacing(10)
+        layout.setContentsMargins(12, 10, 12, 10)
+        layout.setSpacing(12)
 
         # Status indicator
         self.status_label = QLabel("○")
-        self.status_label.setFont(QFont('Arial', 16, QFont.Bold))
-        self.status_label.setStyleSheet(f"color: #666666;")
+        self.status_label.setFont(QFont('Arial', 14, QFont.Bold))
         layout.addWidget(self.status_label)
 
         # Text display
@@ -99,8 +133,7 @@ class TranscriptionOverlay(QWidget):
 
         # Word count
         self.count_label = QLabel("")
-        self.count_label.setFont(QFont('Arial', 8))
-        self.count_label.setStyleSheet("color: #888888;")
+        self.count_label.setFont(QFont('Arial', 9))
         layout.addWidget(self.count_label)
 
         self.setLayout(layout)
@@ -112,6 +145,62 @@ class TranscriptionOverlay(QWidget):
         y = screen.height() - self.height - 60  # Above taskbar
         self.move(x, y)
 
+    def _apply_theme(self):
+        """Apply zen theme based on theme setting (auto/light/dark)."""
+        # Determine actual theme to use
+        if self.theme == "auto":
+            actual_theme = detect_system_theme()
+        else:
+            actual_theme = self.theme
+
+        # Zen theme colors
+        if actual_theme == "dark":
+            # Dark theme - softer colors
+            self.bg_color = '#2D2D2D'
+            self.text_color = '#E0E0E0'
+            self.accent_color = '#FF6B6B'
+            self.border_color = '#404040'
+            self.status_inactive_color = '#666666'
+            self.count_color = '#999999'
+        else:
+            # Light theme - clean and minimal
+            self.bg_color = '#FFFFFF'
+            self.text_color = '#333333'
+            self.accent_color = '#FF6B6B'
+            self.border_color = '#E0E0E0'
+            self.status_inactive_color = '#CCCCCC'
+            self.count_color = '#777777'
+
+        # Apply stylesheet
+        self.setStyleSheet(f"""
+            QWidget {{
+                background-color: {self.bg_color};
+                border: 1px solid {self.border_color};
+                border-radius: 8px;
+            }}
+            QLabel {{
+                color: {self.text_color};
+                background-color: transparent;
+                border: none;
+            }}
+        """)
+
+        # Update status label color if already initialized
+        if hasattr(self, 'status_label'):
+            if self.recording:
+                self.status_label.setStyleSheet(f"color: {self.accent_color};")
+            else:
+                self.status_label.setStyleSheet(f"color: {self.status_inactive_color};")
+
+        # Update count label color if already initialized
+        if hasattr(self, 'count_label'):
+            self.count_label.setStyleSheet(f"color: {self.count_color};")
+
+    def set_theme(self, theme):
+        """Update theme dynamically."""
+        self.theme = theme
+        self._apply_theme()
+
     def set_recording(self, is_recording):
         """Update recording indicator."""
         self.recording = is_recording
@@ -121,7 +210,7 @@ class TranscriptionOverlay(QWidget):
             self.text_label.setText("🎤 Listening...")
         else:
             self.status_label.setText("○")
-            self.status_label.setStyleSheet("color: #666666;")
+            self.status_label.setStyleSheet(f"color: {self.status_inactive_color};")
 
     def update_text(self, text, word_count=0):
         """Update scrolling text (last 50 chars)."""
@@ -162,11 +251,16 @@ class QtSTTServer(QObject):
         self.keep_recordings = keep_recordings if keep_recordings != 3 else self.config.get("keep_recordings", keep_recordings)
         self.window_seconds = window_seconds if window_seconds != 7.0 else self.config.get("window_seconds", window_seconds)
         self.slide_seconds = slide_seconds if slide_seconds != 3.0 else self.config.get("slide_seconds", slide_seconds)
+        self.clear_clipboard_after_paste = self.config.get("clear_clipboard_after_paste", False)
         self.start_delay_seconds = start_delay_seconds if start_delay_seconds != 2.0 else self.config.get("start_delay_seconds", start_delay_seconds)
 
         # Parse hotkey from config
         self.hotkey = self.config.get("hotkey", "alt+q")
         self.hotkey_parts = self._parse_hotkey(self.hotkey)
+
+        # Get theme and audio device from config
+        self.theme = self.config.get("theme", "auto")
+        self.audio_device = self.config.get("audio_device", None)
 
         # Model and recorder
         self.model = None
@@ -176,6 +270,7 @@ class QtSTTServer(QObject):
             start_delay_seconds=self.start_delay_seconds,
             speed=self.speed,
             keep_recordings=self.keep_recordings,
+            device=self.audio_device,
         )
         self.keyboard_controller = Controller()
         self.is_shutting_down = False
@@ -251,7 +346,6 @@ class QtSTTServer(QObject):
                 'tab': Key.tab,
                 'backspace': Key.backspace,
                 'delete': Key.delete,
-                'insert': Key.insert,
                 'home': Key.home,
                 'end': Key.end,
                 'pageup': Key.page_up,
@@ -261,6 +355,10 @@ class QtSTTServer(QObject):
                 'left': Key.left,
                 'right': Key.right,
             }
+
+            # Add insert key only if it exists (not available on macOS)
+            if hasattr(Key, 'insert'):
+                special_keys['insert'] = Key.insert
 
             # F-keys
             for i in range(1, 13):
@@ -382,7 +480,8 @@ class QtSTTServer(QObject):
         menu.addAction(f"Maivi v{__version__}").setEnabled(False)
         menu.addAction("Recording" if self.is_recording else "Ready").setEnabled(False)
         menu.addSeparator()
-        menu.addAction("Settings...", self.open_settings)
+        menu.addAction("📁 Recordings...", self.open_recordings)
+        menu.addAction("⚙️ Settings...", self.open_settings)
         menu.addSeparator()
         menu.addAction("Exit", self.quit_app)
 
@@ -392,7 +491,86 @@ class QtSTTServer(QObject):
     def open_settings(self):
         """Open settings dialog."""
         dialog = SettingsDialog(self.config, self.overlay)
+        # Connect to settings_changed signal for hot reload
+        dialog.settings_changed.connect(self.apply_settings_changes)
         dialog.exec()
+
+    def open_recordings(self):
+        """Open recordings dialog."""
+        dialog = RecordingsDialog(model=self.model, parent=self.overlay)
+        dialog.exec()
+
+    def apply_settings_changes(self, changed_settings):
+        """Apply changed settings immediately (hot reload)."""
+        print(f"🔄 Applying settings changes: {list(changed_settings.keys())}")
+
+        # Apply theme changes
+        if "theme" in changed_settings:
+            self.theme = changed_settings["theme"]
+            if self.overlay:
+                self.overlay.set_theme(self.theme)
+            print(f"✓ Theme updated to: {self.theme}")
+
+        # Apply audio device changes
+        if "audio_device" in changed_settings:
+            self.audio_device = changed_settings["audio_device"]
+            # Update recorder with new device
+            self.recorder.device = self.audio_device
+            device_name = "Default" if self.audio_device is None else f"Device #{self.audio_device}"
+            print(f"✓ Audio device updated to: {device_name}")
+
+        # Apply hotkey changes
+        if "hotkey" in changed_settings:
+            self.hotkey = changed_settings["hotkey"]
+            self.hotkey_parts = self._parse_hotkey(self.hotkey)
+            if self.overlay:
+                self.overlay.hotkey = self.hotkey
+                # Update overlay text if not recording
+                if not self.is_recording:
+                    self.overlay.update_text("", 0)
+            print(f"✓ Hotkey updated to: {self.hotkey}")
+
+        # Apply other settings changes
+        if "auto_paste" in changed_settings:
+            self.auto_paste = changed_settings["auto_paste"]
+            print(f"✓ Auto-paste: {self.auto_paste}")
+
+        if "toggle_mode" in changed_settings:
+            self.toggle_mode = changed_settings["toggle_mode"]
+            mode = "toggle" if self.toggle_mode else "hold"
+            print(f"✓ Recording mode: {mode}")
+
+        if "window_seconds" in changed_settings:
+            self.window_seconds = changed_settings["window_seconds"]
+            print(f"✓ Window size: {self.window_seconds}s")
+
+        if "slide_seconds" in changed_settings:
+            self.slide_seconds = changed_settings["slide_seconds"]
+            print(f"✓ Slide interval: {self.slide_seconds}s")
+
+        if "start_delay_seconds" in changed_settings:
+            self.start_delay_seconds = changed_settings["start_delay_seconds"]
+            print(f"✓ Start delay: {self.start_delay_seconds}s")
+
+        if "speed" in changed_settings:
+            self.speed = changed_settings["speed"]
+            print(f"✓ Speed: {self.speed}x")
+
+        if "keep_recordings" in changed_settings:
+            self.keep_recordings = changed_settings["keep_recordings"]
+            self.recorder.keep_recordings = self.keep_recordings
+            if self.keep_recordings == -1:
+                print("✓ Recordings: Delete immediately")
+            elif self.keep_recordings == 0:
+                print("✓ Recordings: Keep all")
+            else:
+                print(f"✓ Recordings: Keep last {self.keep_recordings}")
+
+        if "clear_clipboard_after_paste" in changed_settings:
+            self.clear_clipboard_after_paste = changed_settings["clear_clipboard_after_paste"]
+            print(f"✓ Clear clipboard after paste: {self.clear_clipboard_after_paste}")
+
+        print("✓ All settings applied successfully!")
 
     def quit_app(self):
         """Quit the application."""
@@ -526,6 +704,11 @@ class QtSTTServer(QObject):
                         self.keyboard_controller.press("v")
                         self.keyboard_controller.release("v")
                         self.keyboard_controller.release(Key.ctrl)
+
+                        # Clear clipboard after paste if configured
+                        if self.clear_clipboard_after_paste:
+                            time.sleep(0.1)  # Small delay to ensure paste completes
+                            pyperclip.copy("")  # Clear clipboard
                 else:
                     self._print("⚠️  No speech detected in recording")
             except Exception as e:
@@ -615,6 +798,11 @@ class QtSTTServer(QObject):
                 self.start_recording()
             else:
                 self.stop_recording()
+            # Note: We don't return False here because:
+            # 1. On macOS, returning False stops the entire listener (breaks toggle)
+            # 2. pynput can't reliably suppress keys on macOS anyway (OS limitation)
+            # Users should choose hotkeys that don't produce characters (F-keys, etc)
+            # or accept that the character may appear briefly
 
     def on_release(self, key):
         """Handle key release."""
@@ -640,7 +828,7 @@ class QtSTTServer(QObject):
         self.app = QApplication(sys.argv)
 
         # Create overlay window
-        self.overlay = TranscriptionOverlay(hotkey=self.hotkey)
+        self.overlay = TranscriptionOverlay(hotkey=self.hotkey, theme=self.theme)
         self.overlay.show()
 
         # Load model in background

@@ -44,6 +44,7 @@ class StreamingRecorder:
         start_delay_seconds=6.0,
         speed=1.0,
         keep_recordings=3,  # Keep last N recordings (0 = keep all, -1 = keep none)
+        device=None,  # Audio input device (None = default, or device index)
     ):
         self.sample_rate = sample_rate
         self.channels = channels
@@ -55,6 +56,7 @@ class StreamingRecorder:
         self.is_recording = False
         self.speed = speed  # Speed multiplier
         self.keep_recordings = keep_recordings  # How many recordings to keep
+        self.device = device  # Audio input device
 
         # Streaming parameters
         self.window_seconds = window_seconds
@@ -97,6 +99,7 @@ class StreamingRecorder:
                     dtype=self.dtype,
                     blocksize=self.chunk,
                     callback=self._audio_callback,
+                    device=self.device,  # Pass device parameter
                 )
                 self.stream.start()
 
@@ -170,8 +173,8 @@ class StreamingRecorder:
                     # Take the last window_samples
                     window_chunk = window_data[-self.window_samples :].copy()
 
-                    # Apply speed adjustment to chunk if needed
-                    if self.speed != 1.0:
+                    # Apply speed adjustment to chunk if needed (skip if speed is effectively 1.0)
+                    if abs(self.speed - 1.0) > 0.001:
                         window_float = window_chunk.astype(np.float32) / 32768.0
                         window_float = librosa.effects.time_stretch(
                             window_float, rate=self.speed
@@ -197,8 +200,8 @@ class StreamingRecorder:
         audio_data = np.concatenate(self.all_frames).astype(self.np_dtype, copy=False)
         audio_float = audio_data.astype(np.float32) / 32768.0  # Normalize to [-1, 1]
 
-        # Apply speed adjustment if needed
-        if self.speed != 1.0:
+        # Apply speed adjustment if needed (skip if speed is effectively 1.0)
+        if abs(self.speed - 1.0) > 0.001:
             audio_float = librosa.effects.time_stretch(audio_float, rate=self.speed)
 
         return audio_float
@@ -229,8 +232,8 @@ class StreamingRecorder:
         audio_data = np.concatenate(self.all_frames).astype(self.np_dtype, copy=False)
         audio_float = audio_data.astype(np.float32) / 32768.0  # Normalize to [-1, 1]
 
-        # Apply speed adjustment if needed
-        if self.speed != 1.0:
+        # Apply speed adjustment if needed (skip if speed is effectively 1.0)
+        if abs(self.speed - 1.0) > 0.001:
             print(f"⚡ Applying {self.speed}x speed adjustment to complete recording...")
             original_duration = len(audio_float) / self.sample_rate
             audio_float = librosa.effects.time_stretch(audio_float, rate=self.speed)
@@ -248,7 +251,9 @@ class StreamingRecorder:
         recordings_dir = data_dir / "recordings"
         recordings_dir.mkdir(parents=True, exist_ok=True)
 
-        speed_suffix = f"_{self.speed}x" if self.speed != 1.0 else ""
+        # Only add speed suffix if speed is significantly different from 1.0
+        # (use tolerance to avoid floating-point precision issues)
+        speed_suffix = f"_{self.speed}x" if abs(self.speed - 1.0) > 0.001 else ""
         output_path = recordings_dir / f"recording_{timestamp}{speed_suffix}.wav"
 
         try:
