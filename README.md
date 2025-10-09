@@ -46,9 +46,7 @@ sudo apt-get install portaudio19-dev python3-pyaudio
 ```
 
 **macOS:**
-```bash
-brew install portaudio
-```
+Grant Maivi microphone, Accessibility, and Input Monitoring permissions the first time you run it (System Settings → Privacy & Security). No additional Homebrew packages are required for audio capture.
 
 **Windows:**
 - PortAudio is usually included with PyAudio

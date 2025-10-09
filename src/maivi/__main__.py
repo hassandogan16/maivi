@@ -36,7 +36,7 @@ How it works:
 Recording storage:
   - Linux: ~/.local/share/maivi/recordings/
   - macOS: ~/Library/Application Support/maivi/recordings/
-  - Windows: %APPDATA%\maivi\recordings\
+  - Windows: %APPDATA%\\maivi\\recordings
   Default: keeps last 3 recordings (use --keep-recordings to change).
 
 For more info: https://github.com/MaximeRivest/maivi

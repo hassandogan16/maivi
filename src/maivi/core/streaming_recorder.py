@@ -3,13 +3,13 @@ Streaming audio recorder with sliding window processing.
 Processes audio chunks in real-time during recording.
 """
 import wave
-import pyaudio
 import threading
 import queue
 import time
 import numpy as np
 import librosa
 import soundfile as sf
+import sounddevice as sd
 from pathlib import Path
 from datetime import datetime
 from collections import deque
@@ -48,11 +48,8 @@ class StreamingRecorder:
         self.sample_rate = sample_rate
         self.channels = channels
         self.chunk = 1024
-        self.format = pyaudio.paInt16
-
-        # Initialize PyAudio (suppress ALSA error spam)
-        with suppress_stderr():
-            self.audio = pyaudio.PyAudio()
+        self.dtype = "int16"
+        self.np_dtype = np.dtype(self.dtype)
 
         self.stream = None
         self.is_recording = False
@@ -93,34 +90,61 @@ class StreamingRecorder:
         self.last_process_time = time.time()
 
         try:
-            self.stream = self.audio.open(
-                format=self.format,
-                channels=self.channels,
-                rate=self.sample_rate,
-                input=True,
-                frames_per_buffer=self.chunk,
-                stream_callback=self._audio_callback,
-            )
-            self.stream.start_stream()
+            with suppress_stderr():
+                self.stream = sd.InputStream(
+                    samplerate=self.sample_rate,
+                    channels=self.channels,
+                    dtype=self.dtype,
+                    blocksize=self.chunk,
+                    callback=self._audio_callback,
+                )
+                self.stream.start()
+
             print(f"🎤 Recording... (streaming after {self.start_delay_seconds}s)")
-        except Exception as e:
-            print(f"Error starting recording: {e}")
+        except sd.PortAudioError as error:
             self.is_recording = False
+            self.stream = None
+            self._handle_portaudio_error(error)
+            return
+        except Exception as error:
+            print(f"Error starting recording: {error}")
+            self.is_recording = False
+            self.stream = None
             return
 
-    def _audio_callback(self, in_data, frame_count, time_info, status):
+    def _handle_portaudio_error(self, error: Exception):
+        """Provide actionable guidance when audio initialization fails."""
+        print(f"Error starting recording: {error}")
+
+        if sys.platform == "darwin":
+            print("   🎙️  macOS may require microphone permission for Maivi.")
+            print(
+                "   Open System Settings → Privacy & Security → Microphone and enable access"
+                " for Maivi (Python)."
+            )
+            print("   You may need to restart Maivi after granting permission.")
+        elif sys.platform.startswith("linux"):
+            print("   Ensure your user has access to the audio input device (check ALSA/Pulse).")
+
+    def _audio_callback(self, indata, frames, time_info, status):
         """Callback for audio stream - runs in separate thread."""
         if status:
             print(f"Audio status: {status}")
 
         if not self.is_recording:
-            return (None, pyaudio.paComplete)
+            return
+
+        # Copy data because sounddevice reuses its buffers
+        audio_np = np.array(indata, dtype=self.np_dtype, copy=True)
+
+        if self.channels > 1:
+            # Collapse multi-channel audio to mono
+            audio_np = audio_np.reshape(-1, self.channels).mean(axis=1).astype(self.np_dtype)
+        else:
+            audio_np = audio_np.reshape(-1)
 
         # Store all frames for final save
-        self.all_frames.append(in_data)
-
-        # Convert to numpy for processing
-        audio_np = np.frombuffer(in_data, dtype=np.int16)
+        self.all_frames.append(audio_np.copy())
 
         # Add to circular buffer
         self.audio_buffer.extend(audio_np)
@@ -138,9 +162,13 @@ class StreamingRecorder:
                 # Only process if we have a full window
                 if len(self.audio_buffer) >= self.window_samples:
                     # Copy current window
-                    window_data = np.array(list(self.audio_buffer))
+                    window_data = np.fromiter(
+                        self.audio_buffer,
+                        dtype=self.np_dtype,
+                        count=len(self.audio_buffer),
+                    )
                     # Take the last window_samples
-                    window_chunk = window_data[-self.window_samples :]
+                    window_chunk = window_data[-self.window_samples :].copy()
 
                     # Apply speed adjustment to chunk if needed
                     if self.speed != 1.0:
@@ -152,8 +180,6 @@ class StreamingRecorder:
 
                     # Add to processing queue
                     self.processing_queue.put(window_chunk)
-
-        return (in_data, pyaudio.paContinue)
 
     def get_next_chunk(self):
         """Get next audio chunk for processing (non-blocking)."""
@@ -168,7 +194,7 @@ class StreamingRecorder:
             return np.array([], dtype=np.float32)
 
         # Convert frames to numpy array
-        audio_data = np.frombuffer(b"".join(self.all_frames), dtype=np.int16)
+        audio_data = np.concatenate(self.all_frames).astype(self.np_dtype, copy=False)
         audio_float = audio_data.astype(np.float32) / 32768.0  # Normalize to [-1, 1]
 
         # Apply speed adjustment if needed
@@ -185,8 +211,14 @@ class StreamingRecorder:
         self.is_recording = False
 
         if self.stream:
-            self.stream.stop_stream()
-            self.stream.close()
+            try:
+                self.stream.stop()
+            except Exception:
+                pass
+            try:
+                self.stream.close()
+            except Exception:
+                pass
             self.stream = None
 
         if not self.all_frames:
@@ -194,7 +226,7 @@ class StreamingRecorder:
             return None
 
         # Convert frames to numpy array
-        audio_data = np.frombuffer(b"".join(self.all_frames), dtype=np.int16)
+        audio_data = np.concatenate(self.all_frames).astype(self.np_dtype, copy=False)
         audio_float = audio_data.astype(np.float32) / 32768.0  # Normalize to [-1, 1]
 
         # Apply speed adjustment if needed
@@ -286,9 +318,9 @@ class StreamingRecorder:
         try:
             with wave.open(str(output_path), "wb") as wf:
                 wf.setnchannels(self.channels)
-                wf.setsampwidth(self.audio.get_sample_size(self.format))
+                wf.setsampwidth(self.np_dtype.itemsize)
                 wf.setframerate(self.sample_rate)
-                wf.writeframes(chunk_np.astype(np.int16).tobytes())
+                wf.writeframes(np.asarray(chunk_np, dtype=self.np_dtype).tobytes())
 
             return str(output_path)
         except Exception as e:
@@ -298,6 +330,12 @@ class StreamingRecorder:
     def cleanup(self):
         """Clean up audio resources."""
         if self.stream:
-            self.stream.stop_stream()
-            self.stream.close()
-        self.audio.terminate()
+            try:
+                self.stream.stop()
+            except Exception:
+                pass
+            try:
+                self.stream.close()
+            except Exception:
+                pass
+            self.stream = None
