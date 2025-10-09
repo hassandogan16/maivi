@@ -18,15 +18,22 @@ Examples:
   maivi                                  # Start with defaults
   maivi --auto-paste                     # Auto-paste transcribed text
   maivi --window 10 --slide 5            # Custom chunk timing
-  maivi --no-toggle                      # Hold mode (hold Alt+Q / Option+Q to record)
+  maivi --no-toggle                      # Hold mode (hold hotkey to record)
   maivi --keep-recordings 10             # Keep last 10 recordings
   maivi --keep-recordings 0              # Keep all recordings
   maivi --keep-recordings -1             # Delete immediately after transcription
   maivi --reprocess ~/.local/share/maivi/recordings/recording_20251005_123456.wav
 
 Controls:
-  Alt+Q (Option+Q on macOS)    Start/stop recording (toggle mode)
+  Alt+Q (default hotkey)       Start/stop recording (toggle mode)
   Esc                          Exit application
+
+Settings:
+  Right-click the system tray icon to access Settings where you can:
+  - Change the recording hotkey
+  - Adjust audio parameters (window, slide, delay, speed)
+  - Configure behavior (toggle mode, auto-paste)
+  - Set recording retention policy
 
 How it works:
   Maivi records audio in overlapping chunks (default: 7s chunks, 3s intervals).
@@ -106,10 +113,11 @@ For more info: https://github.com/MaximeRivest/maivi
     )
 
     # Version
+    from maivi import __version__
     parser.add_argument(
         "--version",
         action="version",
-        version="Maivi v0.3.0"
+        version=f"Maivi v{__version__}"
     )
 
     args = parser.parse_args()
@@ -161,7 +169,8 @@ For more info: https://github.com/MaximeRivest/maivi
 
     # Normal GUI mode
     # Show startup message immediately (before slow imports)
-    print("\n🎤 Maivi - My AI Voice Input v0.3.0")
+    from maivi import __version__
+    print(f"\n🎤 Maivi - My AI Voice Input v{__version__}")
     print("   Starting up... (this may take ~30 seconds)\n")
 
     from maivi.gui.qt_gui import QtSTTServer

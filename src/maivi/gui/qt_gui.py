@@ -24,6 +24,9 @@ from maivi.utils.macos_permissions import (
     ensure_accessibility_permissions,
     open_system_settings_privacy,
 )
+from maivi.config import Config
+from maivi.gui.settings_dialog import SettingsDialog
+from maivi import __version__
 
 # Cross-platform notifications
 try:
@@ -42,11 +45,12 @@ class TranscriptionSignals(QObject):
 class TranscriptionOverlay(QWidget):
     """Small overlay window showing scrolling transcription near taskbar."""
 
-    def __init__(self, width=400, height=60):
+    def __init__(self, width=400, height=60, hotkey="alt+q"):
         super().__init__()
         self.width = width
         self.height = height
         self.recording = False
+        self.hotkey = hotkey
 
         # Setup window
         self.setWindowTitle("STT Live")
@@ -86,7 +90,7 @@ class TranscriptionOverlay(QWidget):
         layout.addWidget(self.status_label)
 
         # Text display
-        self.text_label = QLabel("Ready - Press Alt+Q (Option+Q on macOS) to record")
+        self.text_label = QLabel(f"Ready - Press {self.hotkey.upper()} to record")
         fixed_font = QFontDatabase.systemFont(QFontDatabase.FixedFont)
         fixed_font.setPointSize(10)
         self.text_label.setFont(fixed_font)
@@ -122,7 +126,7 @@ class TranscriptionOverlay(QWidget):
     def update_text(self, text, word_count=0):
         """Update scrolling text (last 50 chars)."""
         display_text = text[-50:] if len(text) > 50 else text
-        self.text_label.setText(display_text or "Ready - Press Alt+Q (Option+Q on macOS) to record")
+        self.text_label.setText(display_text or f"Ready - Press {self.hotkey.upper()} to record")
         if word_count > 0:
             self.count_label.setText(f"{word_count}w")
         else:
@@ -141,24 +145,37 @@ class QtSTTServer(QObject):
         speed=1.0,
         toggle_mode=True,
         keep_recordings=3,  # Keep last N recordings
+        config=None,  # Config object
     ):
         super().__init__()
 
         self.print_lock = threading.Lock()
 
-        self.auto_paste = auto_paste
-        self.speed = speed
-        self.toggle_mode = toggle_mode
-        self.keep_recordings = keep_recordings
+        # Load or create config
+        self.config = config if config is not None else Config()
+
+        # Use passed parameters if they differ from defaults, otherwise use config
+        # This allows CLI args to override config
+        self.auto_paste = auto_paste if auto_paste != False else self.config.get("auto_paste", auto_paste)
+        self.speed = speed if speed != 1.0 else self.config.get("speed", speed)
+        self.toggle_mode = toggle_mode if toggle_mode != True else self.config.get("toggle_mode", toggle_mode)
+        self.keep_recordings = keep_recordings if keep_recordings != 3 else self.config.get("keep_recordings", keep_recordings)
+        self.window_seconds = window_seconds if window_seconds != 7.0 else self.config.get("window_seconds", window_seconds)
+        self.slide_seconds = slide_seconds if slide_seconds != 3.0 else self.config.get("slide_seconds", slide_seconds)
+        self.start_delay_seconds = start_delay_seconds if start_delay_seconds != 2.0 else self.config.get("start_delay_seconds", start_delay_seconds)
+
+        # Parse hotkey from config
+        self.hotkey = self.config.get("hotkey", "alt+q")
+        self.hotkey_parts = self._parse_hotkey(self.hotkey)
 
         # Model and recorder
         self.model = None
         self.recorder = StreamingRecorder(
-            window_seconds=window_seconds,
-            slide_seconds=slide_seconds,
-            start_delay_seconds=start_delay_seconds,
-            speed=speed,
-            keep_recordings=keep_recordings,
+            window_seconds=self.window_seconds,
+            slide_seconds=self.slide_seconds,
+            start_delay_seconds=self.start_delay_seconds,
+            speed=self.speed,
+            keep_recordings=self.keep_recordings,
         )
         self.keyboard_controller = Controller()
         self.is_shutting_down = False
@@ -187,6 +204,76 @@ class QtSTTServer(QObject):
         with self.print_lock:
             print(message, end=end, flush=flush)
 
+    def _parse_hotkey(self, hotkey_str):
+        """Parse hotkey string into component parts."""
+        parts = hotkey_str.lower().split("+")
+        return {
+            "modifiers": set(p for p in parts if p in ["ctrl", "alt", "shift", "meta"]),
+            "keys": [p for p in parts if p not in ["ctrl", "alt", "shift", "meta"]]
+        }
+
+    def _check_hotkey_pressed(self):
+        """Check if the configured hotkey combination is currently pressed."""
+        # Check modifiers
+        modifiers_pressed = set()
+        if Key.ctrl_l in self.current_keys or Key.ctrl in self.current_keys or Key.ctrl_r in self.current_keys:
+            modifiers_pressed.add("ctrl")
+        if Key.alt_l in self.current_keys or Key.alt in self.current_keys or Key.alt_r in self.current_keys:
+            modifiers_pressed.add("alt")
+        if Key.shift_l in self.current_keys or Key.shift in self.current_keys or Key.shift_r in self.current_keys:
+            modifiers_pressed.add("shift")
+        if hasattr(Key, 'cmd') and (Key.cmd in self.current_keys or Key.cmd_l in self.current_keys or Key.cmd_r in self.current_keys):
+            modifiers_pressed.add("meta")
+
+        # Check if required modifiers match
+        if modifiers_pressed != self.hotkey_parts["modifiers"]:
+            return False
+
+        # Check keys
+        for required_key in self.hotkey_parts["keys"]:
+            key_found = False
+            try:
+                # Check regular character keys
+                if keyboard.KeyCode.from_char(required_key) in self.current_keys:
+                    key_found = True
+                # On macOS, some key combinations produce special characters
+                # For example, Option+Q produces 'œ'
+                if required_key == 'q' and keyboard.KeyCode.from_char('œ') in self.current_keys:
+                    key_found = True
+            except:
+                pass
+
+            # Check special keys
+            special_keys = {
+                'space': Key.space,
+                'return': Key.enter,
+                'enter': Key.enter,
+                'tab': Key.tab,
+                'backspace': Key.backspace,
+                'delete': Key.delete,
+                'insert': Key.insert,
+                'home': Key.home,
+                'end': Key.end,
+                'pageup': Key.page_up,
+                'pagedown': Key.page_down,
+                'up': Key.up,
+                'down': Key.down,
+                'left': Key.left,
+                'right': Key.right,
+            }
+
+            # F-keys
+            for i in range(1, 13):
+                special_keys[f'f{i}'] = getattr(Key, f'f{i}', None)
+
+            if required_key in special_keys and special_keys[required_key] in self.current_keys:
+                key_found = True
+
+            if not key_found:
+                return False
+
+        return True
+
     def _update_text_slot(self, text, word_count):
         """Qt slot for updating text (runs in main thread)."""
         if self.overlay:
@@ -207,7 +294,7 @@ class QtSTTServer(QObject):
 
         # Tips to display while loading
         tips = [
-            "💡 Press Alt+Q (Option+Q on macOS) to start recording, press again to stop",
+            f"💡 Press {self.hotkey.upper()} to start recording, press again to stop",
             "💡 Your transcription is automatically copied to clipboard",
             "💡 Press Esc to exit the application at any time",
             "💡 The overlay window shows real-time transcription progress",
@@ -221,6 +308,7 @@ class QtSTTServer(QObject):
             "💡 Recordings saved to system app data directory (keeps last 3)",
             "💡 Use --keep-recordings N to control how many files to keep",
             "💡 Use --reprocess FILE to transcribe an existing recording",
+            "💡 Right-click the system tray icon to access Settings",
         ]
 
         # Start tips display in background
@@ -291,13 +379,20 @@ class QtSTTServer(QObject):
 
         # Create menu
         menu = QMenu()
-        menu.addAction("STT Server").setEnabled(False)
+        menu.addAction(f"Maivi v{__version__}").setEnabled(False)
         menu.addAction("Recording" if self.is_recording else "Ready").setEnabled(False)
+        menu.addSeparator()
+        menu.addAction("Settings...", self.open_settings)
         menu.addSeparator()
         menu.addAction("Exit", self.quit_app)
 
         self.tray_icon.setContextMenu(menu)
         self.tray_icon.show()
+
+    def open_settings(self):
+        """Open settings dialog."""
+        dialog = SettingsDialog(self.config, self.overlay)
+        dialog.exec()
 
     def quit_app(self):
         """Quit the application."""
@@ -511,16 +606,8 @@ class QtSTTServer(QObject):
         except:
             pass
 
-        # Check for Alt+Q
-        alt_pressed = Key.alt_l in self.current_keys or Key.alt in self.current_keys or Key.alt_r in self.current_keys
-        try:
-            # On macOS, Option+Q produces 'œ' character
-            q_pressed = (keyboard.KeyCode.from_char('q') in self.current_keys or
-                        keyboard.KeyCode.from_char('œ') in self.current_keys)
-        except:
-            q_pressed = False
-
-        hotkey_combo = alt_pressed and q_pressed
+        # Check for configured hotkey
+        hotkey_combo = self._check_hotkey_pressed()
 
         if self.toggle_mode and hotkey_combo and not self.hotkey_pressed:
             self.hotkey_pressed = True
@@ -544,16 +631,8 @@ class QtSTTServer(QObject):
         except:
             pass
 
-        # Reset debounce
-        alt_pressed = Key.alt_l in self.current_keys or Key.alt in self.current_keys or Key.alt_r in self.current_keys
-        try:
-            # On macOS, Option+Q produces 'œ' character
-            q_pressed = (keyboard.KeyCode.from_char('q') in self.current_keys or
-                        keyboard.KeyCode.from_char('œ') in self.current_keys)
-        except:
-            q_pressed = False
-
-        if not (alt_pressed and q_pressed):
+        # Reset debounce if hotkey is no longer pressed
+        if not self._check_hotkey_pressed():
             self.hotkey_pressed = False
 
     def run(self):
@@ -561,7 +640,7 @@ class QtSTTServer(QObject):
         self.app = QApplication(sys.argv)
 
         # Create overlay window
-        self.overlay = TranscriptionOverlay()
+        self.overlay = TranscriptionOverlay(hotkey=self.hotkey)
         self.overlay.show()
 
         # Load model in background
@@ -613,7 +692,7 @@ class QtSTTServer(QObject):
                 )
 
         self._print("✓ STT Server running")
-        self._print("  Press Alt+Q (Option+Q on macOS) to start/stop recording")
+        self._print(f"  Press {self.hotkey.upper()} to start/stop recording")
         self._print("  Press Esc to exit")
 
         # Show recording retention policy and directory location
