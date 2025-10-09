@@ -173,6 +173,11 @@ For more info: https://github.com/MaximeRivest/maivi
     print(f"\n🎤 Maivi - My AI Voice Input v{__version__}")
     print("   Starting up... (this may take ~30 seconds)\n")
 
+    # Check for FFmpeg (optional but recommended for advanced audio processing)
+    from maivi.utils.ffmpeg_installer import ensure_ffmpeg_installed
+    ensure_ffmpeg_installed(silent=False)
+    print()
+
     from maivi.gui.qt_gui import QtSTTServer
 
     server = QtSTTServer(

@@ -156,6 +156,11 @@ Streaming Mode (SIMPLE OVERLAPPING CHUNKS):
 
     args = parser.parse_args()
 
+    # Check for FFmpeg (optional but recommended for advanced audio processing)
+    from maivi.utils.ffmpeg_installer import ensure_ffmpeg_installed
+    ensure_ffmpeg_installed(silent=False)
+    print()
+
     # Create and run streaming STT server
     server = StreamingSTTServer(
         auto_paste=args.auto_paste,
