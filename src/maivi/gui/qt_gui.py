@@ -82,7 +82,7 @@ class TranscriptionOverlay(QWidget):
         layout.addWidget(self.status_label)
 
         # Text display
-        self.text_label = QLabel("Ready - Press Alt+Q to record")
+        self.text_label = QLabel("Ready - Press Alt+Q (Option+Q on macOS) to record")
         self.text_label.setFont(QFont('Courier', 10))
         self.text_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         layout.addWidget(self.text_label, stretch=1)
@@ -116,7 +116,7 @@ class TranscriptionOverlay(QWidget):
     def update_text(self, text, word_count=0):
         """Update scrolling text (last 50 chars)."""
         display_text = text[-50:] if len(text) > 50 else text
-        self.text_label.setText(display_text or "Ready - Press Alt+Q to record")
+        self.text_label.setText(display_text or "Ready - Press Alt+Q (Option+Q on macOS) to record")
         if word_count > 0:
             self.count_label.setText(f"{word_count}w")
         else:
@@ -194,7 +194,7 @@ class QtSTTServer(QObject):
 
         # Tips to display while loading
         tips = [
-            "💡 Press Alt+Q to start recording, press again to stop",
+            "💡 Press Alt+Q (Option+Q on macOS) to start recording, press again to stop",
             "💡 Your transcription is automatically copied to clipboard",
             "💡 Press Esc to exit the application at any time",
             "💡 The overlay window shows real-time transcription progress",
@@ -399,13 +399,16 @@ class QtSTTServer(QObject):
                     self.signals.update_text.emit(f"✓ Copied: {text}", len(text.split()))
 
                     if NOTIFICATIONS_AVAILABLE:
-                        preview = text[:50] + "..." if len(text) > 50 else text
-                        notification.notify(
-                            title="Copied to clipboard!",
-                            message=preview,
-                            app_name='STT Server',
-                            timeout=2
-                        )
+                        try:
+                            preview = text[:50] + "..." if len(text) > 50 else text
+                            notification.notify(
+                                title="Copied to clipboard!",
+                                message=preview,
+                                app_name='STT Server',
+                                timeout=2
+                            )
+                        except:
+                            pass  # Silently fail if notifications don't work
 
                     if self.auto_paste:
                         time.sleep(0.2)
@@ -460,13 +463,16 @@ class QtSTTServer(QObject):
                 self.signals.update_text.emit(f"✓ Copied: {final_text}", len(final_text.split()))
 
                 if NOTIFICATIONS_AVAILABLE:
-                    preview = final_text[:50] + "..." if len(final_text) > 50 else final_text
-                    notification.notify(
-                        title="Copied to clipboard!",
-                        message=preview,
-                        app_name='STT Server',
-                        timeout=2
-                    )
+                    try:
+                        preview = final_text[:50] + "..." if len(final_text) > 50 else final_text
+                        notification.notify(
+                            title="Copied to clipboard!",
+                            message=preview,
+                            app_name='STT Server',
+                            timeout=2
+                        )
+                    except:
+                        pass  # Silently fail if notifications don't work
             else:
                 print("⚠️  No speech detected in recording")
 
@@ -493,7 +499,9 @@ class QtSTTServer(QObject):
         # Check for Alt+Q
         alt_pressed = Key.alt_l in self.current_keys or Key.alt in self.current_keys or Key.alt_r in self.current_keys
         try:
-            q_pressed = keyboard.KeyCode.from_char('q') in self.current_keys
+            # On macOS, Option+Q produces 'œ' character
+            q_pressed = (keyboard.KeyCode.from_char('q') in self.current_keys or
+                        keyboard.KeyCode.from_char('œ') in self.current_keys)
         except:
             q_pressed = False
 
@@ -524,7 +532,9 @@ class QtSTTServer(QObject):
         # Reset debounce
         alt_pressed = Key.alt_l in self.current_keys or Key.alt in self.current_keys or Key.alt_r in self.current_keys
         try:
-            q_pressed = keyboard.KeyCode.from_char('q') in self.current_keys
+            # On macOS, Option+Q produces 'œ' character
+            q_pressed = (keyboard.KeyCode.from_char('q') in self.current_keys or
+                        keyboard.KeyCode.from_char('œ') in self.current_keys)
         except:
             q_pressed = False
 
@@ -554,7 +564,7 @@ class QtSTTServer(QObject):
         keyboard_listener.start()
 
         print("✓ STT Server running")
-        print("  Press Alt+Q to start/stop recording")
+        print("  Press Alt+Q (Option+Q on macOS) to start/stop recording")
         print("  Press Esc to exit")
 
         # Show recording retention policy and directory location

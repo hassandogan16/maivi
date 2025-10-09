@@ -50,7 +50,7 @@ Examples:
 
 Usage:
   1. Start the server
-  2. Hold Alt+Q to record (or press once in toggle mode)
+  2. Hold Alt+Q (Option+Q on macOS) to record (or press once in toggle mode)
   3. Release to stop and transcribe (or press again in toggle mode)
   4. Text is copied to clipboard
   5. If --auto-paste is enabled, text is pasted automatically

@@ -260,9 +260,10 @@ class StreamingSTTServer:
         # Check for Alt+Q combination (simple and uncommon)
         alt_pressed = Key.alt_l in self.current_keys or Key.alt in self.current_keys or Key.alt_r in self.current_keys
 
-        # Check for 'q' key
+        # Check for 'q' key (or 'œ' on macOS when Option+Q is pressed)
         try:
-            q_pressed = keyboard.KeyCode.from_char('q') in self.current_keys
+            q_pressed = (keyboard.KeyCode.from_char('q') in self.current_keys or
+                        keyboard.KeyCode.from_char('œ') in self.current_keys)
         except:
             q_pressed = False
 
@@ -417,7 +418,8 @@ class StreamingSTTServer:
         alt_pressed = Key.alt_l in self.current_keys or Key.alt in self.current_keys or Key.alt_r in self.current_keys
 
         try:
-            q_pressed = keyboard.KeyCode.from_char('q') in self.current_keys
+            q_pressed = (keyboard.KeyCode.from_char('q') in self.current_keys or
+                        keyboard.KeyCode.from_char('œ') in self.current_keys)
         except:
             q_pressed = False
 
@@ -447,9 +449,9 @@ class StreamingSTTServer:
         print(f"Overlap: {self.recorder.window_seconds - self.recorder.slide_seconds}s (for merging)")
         print(f"Start delay: {self.recorder.start_delay_seconds}s")
         if self.toggle_mode:
-            print(f"Hotkey: Alt+Q (press once to start, again to stop)")
+            print(f"Hotkey: Alt+Q (Option+Q on macOS) - press once to start, again to stop")
         else:
-            print(f"Hotkey: Alt+Q (hold to record)")
+            print(f"Hotkey: Alt+Q (Option+Q on macOS) - hold to record")
         if self.output_file:
             print(f"Output file: {self.output_file} (streaming)")
         print(f"Exit: Press Esc")
@@ -461,9 +463,9 @@ class StreamingSTTServer:
         # Start keyboard listener
         try:
             if self.toggle_mode:
-                print(f"\n✓ Ready! Press Alt+Q once to start recording.")
+                print(f"\n✓ Ready! Press Alt+Q (Option+Q on macOS) once to start recording.")
             else:
-                print(f"\n✓ Ready! Hold Alt+Q to start recording.")
+                print(f"\n✓ Ready! Hold Alt+Q (Option+Q on macOS) to start recording.")
             print(f"  Streaming will start after {self.recorder.start_delay_seconds}s\n")
 
             with keyboard.Listener(
