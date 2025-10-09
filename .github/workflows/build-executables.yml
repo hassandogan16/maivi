@@ -139,13 +139,65 @@ jobs:
     - name: Download all artifacts
       uses: actions/download-artifact@v4
 
+    - name: Generate checksums
+      run: |
+        cd maivi-linux && sha256sum maivi-linux > maivi-linux.sha256 && cd ..
+        cd maivi-macos && sha256sum maivi-macos > maivi-macos.sha256 && cd ..
+        cd maivi-windows && sha256sum maivi-windows.exe > maivi-windows.exe.sha256 && cd ..
+
+    - name: Display file sizes
+      run: |
+        echo "## File Sizes" > file_sizes.txt
+        echo "" >> file_sizes.txt
+        ls -lh maivi-linux/maivi-linux maivi-macos/maivi-macos maivi-windows/maivi-windows.exe >> file_sizes.txt
+
     - name: Create Release
       uses: softprops/action-gh-release@v1
       with:
         files: |
           maivi-linux/maivi-linux
+          maivi-linux/maivi-linux.sha256
           maivi-macos/maivi-macos
+          maivi-macos/maivi-macos.sha256
           maivi-windows/maivi-windows.exe
+          maivi-windows/maivi-windows.exe.sha256
         generate_release_notes: true
+        body: |
+          ## 📦 Downloads
+
+          Download the executable for your platform:
+
+          - **Linux**: `maivi-linux` (see checksums below)
+          - **macOS**: `maivi-macos` (see checksums below)
+          - **Windows**: `maivi-windows.exe` (see checksums below)
+
+          ### Installation
+
+          **Linux/macOS:**
+          ```bash
+          # Download the executable
+          # Make it executable
+          chmod +x maivi-linux  # or maivi-macos
+          # Run it
+          ./maivi-linux  # or ./maivi-macos
+          ```
+
+          **Windows:**
+          - Download `maivi-windows.exe`
+          - Double-click to run (or run from command prompt)
+
+          ### Verify Checksums (Optional but Recommended)
+
+          Verify your download with SHA256:
+          ```bash
+          sha256sum -c maivi-linux.sha256    # Linux
+          shasum -a 256 -c maivi-macos.sha256  # macOS
+          certutil -hashfile maivi-windows.exe SHA256  # Windows (compare with .sha256 file)
+          ```
+
+          ### Alternative: Install via pip
+          ```bash
+          pip install maivi
+          ```
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

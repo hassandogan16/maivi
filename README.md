@@ -7,6 +7,9 @@ Maivi (My AI Voice Input) is a cross-platform desktop application that turns you
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)
 ![Platform](https://img.shields.io/badge/platform-linux%20%7C%20macos%20%7C%20windows-lightgrey.svg)
+[![GitHub Release](https://img.shields.io/github/v/release/MaximeRivest/maivi)](https://github.com/MaximeRivest/maivi/releases/latest)
+[![PyPI](https://img.shields.io/pypi/v/maivi)](https://pypi.org/project/maivi/)
+[![Downloads](https://img.shields.io/github/downloads/MaximeRivest/maivi/total)](https://github.com/MaximeRivest/maivi/releases)
 
 ## ✨ Features
 
@@ -18,6 +21,47 @@ Maivi (My AI Voice Input) is a cross-platform desktop application that turns you
 - 💻 **CPU-Only** - No GPU required (though GPU acceleration is supported)
 - 🌍 **High Accuracy** - Powered by NVIDIA Parakeet TDT 0.6B model (~6-9% WER)
 - 🚀 **Fast** - ~0.36x RTF (processes 7s audio in 2.5s on CPU)
+
+## 📥 Download
+
+### Pre-built Executables (Recommended)
+
+Download the latest executable for your platform from the [Releases page](https://github.com/MaximeRivest/maivi/releases/latest):
+
+| Platform | Download | Size |
+|----------|----------|------|
+| 🐧 **Linux** | [maivi-linux](https://github.com/MaximeRivest/maivi/releases/latest/download/maivi-linux) | ~300MB |
+| 🍎 **macOS** | [maivi-macos](https://github.com/MaximeRivest/maivi/releases/latest/download/maivi-macos) | ~300MB |
+| 🪟 **Windows** | [maivi-windows.exe](https://github.com/MaximeRivest/maivi/releases/latest/download/maivi-windows.exe) | ~300MB |
+
+**Quick Start:**
+
+**Linux/macOS:**
+```bash
+# Download and make executable
+chmod +x maivi-linux  # or maivi-macos
+# Run
+./maivi-linux  # or ./maivi-macos
+```
+
+**Windows:**
+- Download `maivi-windows.exe`
+- Double-click to run (or run from command prompt)
+
+**First Run Notes:**
+- The first time you run Maivi, it will download the AI model (~600MB)
+- On macOS, you may need to grant permissions: System Settings → Privacy & Security
+- FFmpeg installation will be offered if not already installed (optional)
+
+### Install via pip
+
+Alternatively, install from PyPI:
+
+```bash
+pip install maivi --extra-index-url https://download.pytorch.org/whl/cpu
+```
+
+See [Installation](#installation) section for more details.
 
 ## 🚀 Quick Start
 
@@ -133,22 +177,25 @@ maia-cli --no-pause-breaks
 maia-cli --output-file transcription.txt
 ```
 
-## 📦 Building Executables
+## 📦 Building from Source
 
-Maivi can be packaged as standalone executables for easy distribution:
+For developers who want to build executables:
 
 ```bash
 # Install build dependencies
 pip install maivi[build]
 
 # Build executable
-pyinstaller --onefile --windowed \
+pyinstaller --onefile \
   --name maivi \
-  --add-data "src/maia:maia" \
-  src/maia/__main__.py
+  --add-data "src/maivi:maivi" \
+  --hidden-import=nemo \
+  --hidden-import=nemo.collections.asr \
+  --hidden-import=PySide6 \
+  src/maivi/__main__.py
 ```
 
-Pre-built executables are available in [Releases](https://github.com/MaximeRivest/maivi/releases).
+Executables are automatically built via GitHub Actions for each release. See [.github/workflows/build-executables.yml](.github/workflows/build-executables.yml) for the full build configuration.
 
 ## 🏗️ Development
 
